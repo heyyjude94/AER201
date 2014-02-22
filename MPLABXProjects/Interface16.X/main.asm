@@ -12,34 +12,49 @@
       __CONFIG _CP_OFF & _WDT_OFF & _BODEN_ON & _PWRTE_ON & _HS_OSC & _WRT_ENABLE_ON & _CPD_OFF & _LVP_OFF
 
 	cblock	0x20
-		COUNTH ;0x70
-		COUNTM ;0x71
-		COUNTL ;0x72
-		Table_Counter ;0x73
-		lcd_tmp ;0x74
-        key_temp ;0x75
-        test ;0x76
-        rtc1 ;0x77
-        rtc2
-        com
-        dat
-        lcd_d1
-        lcd_d2
-        bcd
-        count
-        show_data
-        w_temp
-        status_temp
-        pass
-        flickerfail
-        ledfail
-        runtime
-        timercount
-        ones
-        tens
-        huns
-        count_temp
-        run_temp
+		COUNTH ;0x20
+		COUNTM ;0x21
+		COUNTL ;0x22
+		Table_Counter ;0x23
+		lcd_tmp ;0x24
+        key_temp ;0x25
+        test ;0x26
+        rtc1 ;0x27
+        rtc2 ;0x28
+        com ;0x29
+        dat ;0x2a
+        lcd_d1 ;0x2b
+        lcd_d2 ;0x2c
+        bcd ;0x2d
+        count ;0x2e
+        show_data ;02f
+        w_temp ;0x30
+        status_temp ;0x31
+        pass ;0x32
+        flickerfail ;0x33
+        ledfail ;0x34
+        runtime ;0x35
+        timercount ;0x36
+        ones ;0x37
+        tens ;0x38
+        huns ;0x39
+        count_temp ;0x3a
+        run_temp ;0x3b
+        ADDRL ;0x3c
+        DATAL ;0x3d
+        VALUEL ;0x3e
+        signal ;0x3f
+        none ;0x40
+        light1 ;0x41
+        light2 ;0x42
+        light3 ;0x43
+        light4 ;0x44
+        light5 ;0x45
+        light6 ;0x46
+        light7 ;0x47
+        light8 ;0x48
+        light9 ;0x49
+        result_temp
 
 	endc
 
@@ -70,7 +85,7 @@ init
          clrf       runtime
 
          bsf       STATUS,RP0     ; select bank 1
-         clrf      TRISA          ; All port A is output
+         clrf      TRISA
          movlw     b'11110011'    ; Set required keypad inputs
          movwf     TRISB
          clrf      TRISC          ; All port C is output
@@ -89,6 +104,13 @@ init
 
          call      InitLCD    ;Initialize the LCD (code in lcd.asm; imported by lcd.inc)
 
+         ; init EEPROM
+         movlw    0x0a
+         movwf    ADDRL
+         clrf     DATAL
+         clrf     VALUEL
+
+
 
 
 ;MAIN PROGRAM
@@ -97,7 +119,7 @@ Main	Display		Welcome_Msg
         call        HalfS
         call        HalfS
         call        HalfS
-        Clear_Display
+        call        Clear_Display
 
 Start_Test
    		Display		Menu
@@ -159,19 +181,29 @@ RTC
 		addwf	PCL,F
 		dt		"Time:", 0
 
-RTC2
-		addwf	PCL,F
-		dt		":", 0
+Writing
+        addwf   PCL, F
+        dt      "Writing EE", 0
 
 Trial
         addwf   PCL, F
-        dt      "P:  FF:  LF: ", 0
-
+        dt      "P: FF: LF: N:", 0
 
 
 ;***************************************
 ; Helper Subrountines
 ;***************************************
+
+Switch_Lines
+		movlw	B'11000000'
+		call	WR_INS
+		return
+
+Clear_Display
+		movlw	B'00000001'
+		call	WR_INS
+		return
+
 InitLCD
 	bcf STATUS,RP0
 	bsf E     ;E default high
@@ -226,23 +258,53 @@ check_A
     xorlw   D'3'
     btfss   STATUS, Z
         goto    check_B
-    bsf    INTCON, 5
-    Clear_Display
+
+    call Clear_Display
     Display Run
     call    HalfS
-    Clear_Display
+    call Clear_Display
     call    Motor_On
+    bsf    INTCON, 5
     call    count_down
-    Clear_Display
-    call    Motor_Off
     bcf    INTCON, 5
+    call Clear_Display
+    call    Motor_Off
+
     Display Done
-    Switch_Lines
+    call Switch_Lines
     Display Runtime 
     call Convert
-    call    wait
     clrf    runtime
-    Clear_Display
+    ;writing run info into EEPROM
+    movf    pass, VALUEL
+    movwf   VALUEL
+    call    write_EE
+
+    incf    ADDRL
+    movf    flickerfail, VALUEL
+    movwf   VALUEL
+    call    write_EE
+    incf    ADDRL
+
+    movf    ledfail, VALUEL
+    movwf   VALUEL
+    call    write_EE
+    incf    ADDRL
+
+    movf    none, VALUEL
+    movwf   VALUEL
+    call    write_EE
+    ;going back to original ADDRL address
+    decf    ADDRL
+    decf    ADDRL
+    decf    ADDRL 
+    call    wait
+    call Clear_Display
+    ;can check previous run trials
+    call results_access
+    call wait
+
+    call Clear_Display
     return
 
 check_B
@@ -250,14 +312,12 @@ check_B
     xorlw D'7'
     btfss STATUS, Z
         goto check_C
-    Clear_Display
+    call Clear_Display
     Display PMem
-    Switch_Lines
+    call Switch_Lines
     Display PMenu
-    call HalfS
     call pmenu_access
-    call HalfS
-    Clear_Display
+    call Clear_Display
     return
 
 check_C
@@ -265,44 +325,358 @@ check_C
     xorlw D'11'
     btfss STATUS, Z
         goto Other_wise
-    Clear_Display
+    call Clear_Display
     call show_RTC
-    Clear_Display
+    call Clear_Display
     return
 
 Other_wise
-    Clear_Display
+    call Clear_Display
     return
 
 
 count_down
-        movlw D'9'
-        movwf count
-        movlw H'00'
-        movwf show_data
+        ;movlw D'9'
+        ;movwf count
+        clrf show_data
         clrf pass
         clrf flickerfail
         clrf ledfail
+        clrf none
+        clrf light1
+        clrf light2
+        clrf light3
+        clrf light4
+        clrf light5
+        clrf light6
+        clrf light7
+        clrf light8
+        clrf light9
+        Display Run
 
 count_loop
-        incf show_data
+        movlw b'00000000'
+        movwf PORTA
+        call Check_Flicker
+        movf result_temp, w
+        movwf light1
+
+        movlw b'00000001'
+        movwf PORTA
+        call Check_Flicker
+        movf result_temp, w
+        movwf light2
+
+        movlw b'00000010'
+        movwf PORTA
+        call Check_Flicker
+        movf result_temp, w
+        movwf light3
+
+        movlw b'00000011'
+        movwf PORTA
+        call Check_Flicker
+        movf result_temp, w
+        movwf light4
+
+        movlw b'00000100'
+        movwf PORTA
+        call Check_Flicker
+        movf result_temp, w
+        movwf light5
+
+        movlw b'00000101'
+        movwf PORTA
+        call Check_Flicker
+        movf result_temp, w
+        movwf light6
+
+        movlw b'00000110'
+        movwf PORTA
+        call Check_Flicker
+        movf result_temp, w
+        movwf light7
+
+        movlw b'00000111'
+        movwf PORTA
+        call Check_Flicker
+        movf result_temp, w
+        movwf light8
+
+        movlw b'00001000'
+        movwf PORTA
+        call Check_Flicker
+        movf result_temp, w
+        movwf light9
+        return
+
+Check_Flicker
+        call    HalfS 
+        clrf    signal
+        movf    PORTB, w
+        andlw   b'00000001'
+        btfss   STATUS, Z
+                goto flickertime
+        incf    none
+        incf    show_data
+        movlw   b'00000001'
+        movwf   result_temp
+        goto    Display_results
+
+flickertime
+        bsf     PORTA, 4
+        clrf    signal
+        call    HalfS
+        call    HalfS
+        call    HalfS
+        call    HalfS
+        call    HalfS
+        call    HalfS
+        call    HalfS
+        clrf    result_temp
+        incf    show_data
+        movlw   B'10000000' ;move cursor to position H?4B?
+        call    WR_INS
+        btfss   signal, 7
+            goto    notflickerfail
+        incf    flickerfail
+        movlw   b'00000100'
+        movwf   result_temp
+        goto    Display_results
+
+notflickerfail 
+        movf    signal, w
+        andlw   b'11111000'
+        btfss   STATUS, Z
+            goto    goodcandle
+        incf    ledfail
+        movlw   b'00000010'
+        movwf   result_temp
+        goto    Display_results
+
+goodcandle    
+        incf    pass
+        movlw   b'00001000'
+        movwf   result_temp
+
+Display_results
+        call Clear_Display
         BCD_DisplayS show_data
-        Switch_Lines
-        Display Trial
-        movlw B'11000010' ;move cursor to Pass
-        call WR_INS
-        incf pass
+        call    Convert1
+        call Switch_Lines
+        Display     Trial
+        movlw   B'11000010' ;move cursor to Pass
+        call    WR_INS
         BCD_DisplayS pass
-        movlw B'11000111' ;move cursor to 47
-        call WR_INS
+        movlw   B'11000110' ;move cursor to 46
+        call    WR_INS
         BCD_DisplayS flickerfail
-        movlw B'11001100' ;move cursor to position H?4C?
-        call WR_INS
+        movlw   B'11001010' ;move cursor to position 4A
+        call    WR_INS
         BCD_DisplayS ledfail
+        movlw   B'11001101' ;move crusor to 4E
+        call    WR_INS
+        BCD_DisplayS none
+        return
+
+results_access
+         movlw   B'10000000' ;move cursor to Pass
+         call    WR_INS
+         Display PMenu
+         call		HalfS    ;Wait until data is available from the keypad
+         btfss		PORTB,1
+         goto		results_access
+
+         swapf		PORTB,W     ;Read PortB<7:4> into W<3:0>
+         andlw		0x0F
+         movwf      key_temp
+
+lightone
+         xorlw      D'0'
+         btfss      STATUS, Z
+            goto    lighttwo
+         movf       light1, w
+         movwf      result_temp
+         call       Switch_Lines
+         movlw      "1"
+         call       WR_DATA
+         movlw      ":"
+         call       WR_DATA
+         call       display
+         call       HalfS
+         call       Clear_Display
+         goto       results_access
+
+lighttwo
+        movf key_temp, W
+        xorlw       D'1'
+        btfss       STATUS, Z
+            goto    lightthree
+        movf        light2, w
+        movwf       result_temp
+        call        Switch_Lines
+        movlw       "2"
+        call        WR_DATA
+        movlw       ":"
+        call        WR_DATA
+        call        display
+        call        HalfS
+        call        Clear_Display
+        goto        results_access
+
+lightthree 
+        movf key_temp, W
+        xorlw       D'2'
+        btfss       STATUS, Z
+            goto    lightfour
+        movf        light3, w
+        movwf       result_temp
+        call        Switch_Lines
+        movlw       "3"
+        call        WR_DATA
+        movlw       ":"
+        call        WR_DATA
+        call        display
+        call        HalfS
+        call        Clear_Display
+        goto        results_access
+
+lightfour
+        movf key_temp, W
+        xorlw       D'4'
+        btfss       STATUS, Z
+            goto    lightfive
+        movf        light4, w
+        movwf       result_temp
+        call        Switch_Lines
+        movlw       "4"
+        call        WR_DATA
+        movlw       ":"
+        call        WR_DATA
+        call        display
+        call        HalfS
+        call        Clear_Display
+        goto        results_access
+
+lightfive
+        movf key_temp, W
+        xorlw       D'5'
+        btfss       STATUS, Z
+            goto    lightsix
+        movf       light5, w
+        movwf      result_temp
+        call        Switch_Lines
+        movlw      "5"
+        call       WR_DATA
+        movlw      ":"
+        call       WR_DATA
+        call       display
+        call       HalfS
+        call       Clear_Display
+        goto       results_access
+
+lightsix
+        movf key_temp, W
+        xorlw       D'6'
+        btfss       STATUS, Z
+            goto    lightseven
+         movf       light6, w
+         movwf      result_temp
+         call Switch_Lines
+         movlw      "6"
+         call       WR_DATA
+         movlw      ":"
+         call       WR_DATA
+         call       display
+         call       HalfS
+         call Clear_Display
+         goto       results_access
+
+lightseven
+        movf key_temp, W
+        xorlw       D'8'
+        btfss       STATUS, Z
+            goto    lighteight
+         movf       light7, w
+         movwf      result_temp
+         call Switch_Lines
+         movlw      "7"
+         call       WR_DATA
+         movlw      ":"
+         call       WR_DATA
+         call       display
+         call       HalfS
+         call Clear_Display
+         goto       results_access
+
+lighteight
+        movf key_temp, W
+        xorlw       D'9'
+        btfss       STATUS, Z
+            goto    lightnine
+         movf       light8, w
+         movwf      result_temp
+         call Switch_Lines
+         movlw      "8"
+         call       WR_DATA
+         movlw      ":"
+         call       WR_DATA
+         call       display
+         call       HalfS
+         call Clear_Display
+         goto       results_access
+
+lightnine
+        movf key_temp, W
+        xorlw       D'10'
+        btfss       STATUS, Z
+            goto    next
+         movf       light9, w
+         movwf      result_temp
+         call Switch_Lines
+         movlw      "9"
+         call       WR_DATA
+         movlw      ":"
+         call       WR_DATA
+         call       display
+         call       HalfS
+         call Clear_Display
+         goto       results_access
+
+next
+         return
+
+
+display
+        btfss   result_temp, 0
+            goto notnone
+        movlw "N"
+        call WR_DATA
+        goto end_display
+
+notnone
+        btfss   result_temp, 1
+            goto notlf
+        movlw "L"
+        call WR_DATA
+        movlw "F"
+        call WR_DATA
+        goto end_display
+
+notlf
+        btfss   result_temp, 2
+            goto notff
+        movlw "F"
+        call WR_DATA
+        movlw "F"
+        call WR_DATA
+        goto end_display
+notff
+        movlw "P"
+        call WR_DATA
+
+end_display
         call HalfS
-        Clear_Display
-        decfsz  count, F
-        goto count_loop
         return
 
 pmenu_access
@@ -312,134 +686,157 @@ pmenu_access
 
          swapf		PORTB,W     ;Read PortB<7:4> into W<3:0>
          andlw		0x0F
-         movwf key_temp
+         movwf      key_temp
 check_1
         xorlw D'0'
         btfss STATUS, Z
             goto check_2
-        Clear_Display
+        call Clear_Display
         movlw H'01'
         movwf lcd_tmp
         BCD_Display lcd_tmp
-        Switch_Lines
+        call Switch_Lines
         Display Trial
-        call wait
-        return
+        movlw   B'11000010' ;move cursor to Pass
+        call WR_INS
+        call read_EE
+        BCD_DisplayS DATAL
+        movlw   B'11000110' ;move cursor to 46
+        call WR_INS
+        incf ADDRL
+        call read_EE
+        BCD_DisplayS DATAL
+        movlw   B'11001010' ;move cursor to position 4A
+        call WR_INS
+        incf ADDRL
+        call read_EE
+        BCD_DisplayS DATAL
+        movlw   B'11001101' ;move cursor to position 4A
+        call WR_INS
+        incf ADDRL
+        call read_EE
+        BCD_DisplayS DATAL
+        ;letting ADDRL go back
+        decf ADDRL
+        decf ADDRL
+        decf ADDRL
+        call HalfS
+        goto pmenu_access
 
 check_2
         movf key_temp, W
         xorlw D'1'
         btfss STATUS, Z
             goto check_3
-        Clear_Display
+        call Clear_Display
         movlw H'02'
         movwf lcd_tmp
         BCD_Display lcd_tmp
-        Switch_Lines
+        call Switch_Lines
         Display Trial
-        call wait
-        return
+        call HalfS
+        goto pmenu_access
 
 check_3
         movf key_temp, W
         xorlw D'2'
         btfss STATUS, Z
             goto check_4
-        Clear_Display
+        call Clear_Display
         movlw D'3'
         movwf lcd_tmp
         BCD_Display lcd_tmp
-        Switch_Lines
+        call Switch_Lines
         Display Trial
-        call wait
-        return
+        call HalfS
+        goto pmenu_access
 
 check_4
         movf key_temp, W
         xorlw D'4'
         btfss STATUS, Z
             goto check_5
-        Clear_Display
+        call Clear_Display
         movlw H'04'
         movwf lcd_tmp
         BCD_Display lcd_tmp
-        Switch_Lines
+        call Switch_Lines
         Display Trial
-        call wait
-        return
+        call HalfS
+        goto pmenu_access
 
 check_5
         movf key_temp, W
         xorlw D'5'
         btfss STATUS, Z
             goto check_6
-        Clear_Display
+        call Clear_Display
         movlw H'05'
         movwf lcd_tmp
         BCD_Display lcd_tmp
-        Switch_Lines
+        call Switch_Lines
         Display Trial
-        call wait
-        return
+        call HalfS
+        goto pmenu_access
 
 check_6
         movf key_temp, W
         xorlw D'6'
         btfss STATUS, Z
             goto check_7
-        Clear_Display
+        call Clear_Display
         movlw H'06'
         movwf lcd_tmp
         BCD_Display lcd_tmp
-        Switch_Lines
+        call Switch_Lines
         Display Trial
-        call wait
-        return
+        call HalfS
+        goto pmenu_access
 
 check_7
         movf key_temp, W
         xorlw D'8'
         btfss STATUS, Z
             goto check_8
-        Clear_Display
+        call Clear_Display
         movlw H'07'
         movwf lcd_tmp
         BCD_Display lcd_tmp
-        Switch_Lines
+        call Switch_Lines
         Display Trial
-        call wait
-        return
+        call HalfS
+        goto pmenu_access
 
 check_8
         movf key_temp, W
         xorlw D'9'
         btfss STATUS, Z
             goto check_9
-        Clear_Display
+        call Clear_Display
         movlw H'08'
         movwf lcd_tmp
         BCD_Display lcd_tmp
-        Switch_Lines
+        call Switch_Lines
         Display Trial
-        call wait
-        return
+        call HalfS
+        goto pmenu_access
 
 check_9
         movf key_temp, W
         xorlw D'10'
         btfss STATUS, Z
             goto continue
-        Clear_Display
+        call Clear_Display
         movlw H'09'
         movwf lcd_tmp
         BCD_Display lcd_tmp
-        Switch_Lines
+        call Switch_Lines
         Display Trial
-        call wait
-        return
+        call HalfS
+        goto pmenu_access
 
 continue
-        Clear_Display
+        call Clear_Display
         return
 
 wait
@@ -529,7 +926,7 @@ Motor_On
     call HalfS
     movlw 0x00 ;turn motor off
     movwf PORTC
-    Clear_Display
+    call Clear_Display
     return
 
 Motor_Off
@@ -539,7 +936,7 @@ Motor_Off
     call HalfS
     movlw 0x00 ;turn motor off
     movwf PORTC
-    Clear_Display
+    call Clear_Display
     return
 
 HalfS
@@ -687,6 +1084,93 @@ CARRYTENS
     bsf STATUS, C
     RETURN
 
+Convert1
+    clrf run_temp
+;save and restore
+    movf signal, w
+    movwf run_temp
+    movlw 8
+    movwf count_temp
+    clrf huns
+    clrf tens
+    clrf ones
+
+BCDADD31
+
+    movlw 5
+    subwf huns, 0
+    btfsc STATUS, C
+    CALL ADD3HUNS1
+
+    movlw 5
+    subwf tens, 0
+    btfsc STATUS, C
+    CALL ADD3TENS1
+
+    movlw 5
+    subwf ones, 0
+    btfsc STATUS, C
+    CALL ADD3ONES1
+
+    decf count_temp, 1
+    bcf STATUS, C
+    rlf signal, 1
+    rlf ones, 1
+    btfsc ones,4 ;
+    CALL CARRYONES1
+    rlf tens, 1
+
+    btfsc tens,4 ;
+    CALL CARRYTENS1
+    rlf huns,1
+    bcf STATUS, C
+
+    movf count_temp, 0
+    btfss STATUS, Z
+    GOTO BCDADD31
+
+
+    movf huns, 0 ; add ASCII Offset
+    addlw h'30'
+    call WR_DATA
+
+    movf tens, 0 ; add ASCII Offset
+    addlw h'30'
+    call WR_DATA
+
+    movf ones, 0 ; add ASCII Offset
+    addlw h'30'
+    call WR_DATA
+
+    movf run_temp, w
+    movwf signal
+    RETURN
+
+ADD3HUNS1
+    movlw 3
+    addwf huns,1
+    RETURN
+
+ADD3TENS1
+    movlw 3
+    addwf tens,1
+    RETURN
+
+ADD3ONES1
+    movlw 3
+    addwf ones,1
+    RETURN
+
+CARRYONES1
+    bcf ones, 4
+    bsf STATUS, C
+    RETURN
+
+CARRYTENS1
+    bcf tens, 4
+    bsf STATUS, C
+    RETURN
+
 lcdLongDelay
     movlw d'20'
     movwf lcd_d2
@@ -704,13 +1188,19 @@ ISR
         movwf status_temp
 
 Timer
-        bcf INTCON, 2
+        bcf     INTCON, 2
         decfsz  timercount, f
-            goto finish
-        incf runtime, f
-        movlw D'38'
-        movwf timercount
+            goto    addsignal
+        incf    runtime, f
+        movlw   D'38'
+        movwf   timercount
+        goto    finish
 
+addsignal
+        banksel PORTB
+        btfss   PORTB, 0
+            goto    finish
+        incf    signal
 
 finish
         movf status_temp, w
@@ -719,4 +1209,63 @@ finish
         swapf w_temp, w
         retfie
 
+write_EE
+;write to EEPROM
+    banksel ADDRL
+    movf    ADDRL, W ; write address of desired program memory location
+    banksel EEADR
+    movwf   EEADR
+;    movf    ADDRH, W
+;    movwf   EEADRH
+    banksel VALUEL
+    movf    VALUEL, W ; write value to program at desired memory locqation
+    banksel EEDATA
+    movwf   EEDATA
+;    movf    VALUEH, W
+;    movwf   EEDATH
+
+    bsf     STATUS, RP0
+    bsf     EECON1, EEPGD
+    bsf     EECON1, WREN
+    bcf     INTCON, GIE
+
+    movlw   0x55
+    movwf   EECON2
+    movlw   0xaa
+    movwf   EECON2 ;
+    bsf     EECON1, WR ; start write operation
+    nop ;wait for micro
+    nop
+
+    bsf    INTCON, GIE ;re-enable interrupts
+    bcf    EECON1, WREN ;disables writes
+    bcf    STATUS, RP0
+    bcf    STATUS, RP1 
+    return
+
+read_EE
+    banksel ADDRL
+    movf   ADDRL, W
+    banksel EEADR
+    movwf   EEADR
+ ;   banksel ADDRH
+ ;   movf    ADDRH, W
+ ;   banksel EEADRH
+ ;   movwf   EEADRH
+    banksel EECON1
+    bsf     EECON1, EEPGD
+    bsf     EECON1, RD
+    nop
+    nop
+    bcf     STATUS, RP0
+    movf    EEDATA, W
+    banksel DATAL
+    movwf   DATAL
+  ;  banksel EEDATH
+   ; movf    EEDATH, W
+   ; banksel DATAH
+   ; movwf   DATAH
+    bcf     STATUS, RP0
+    bcf     STATUS, RP1
+    return
 END
