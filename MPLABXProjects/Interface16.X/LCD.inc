@@ -48,13 +48,3 @@ loop_	movf	Table_Counter,W
 end_
 		endm
 
-Switch_Lines macro
-		movlw	B'11000000'
-		call	WR_INS
-		endm
-
-Clear_Display macro
-		movlw	B'00000001'
-		call	WR_INS
-		endm
-
