@@ -1,0 +1,2576 @@
+Disassembly Listing for Interface16
+Generated From:
+/Users/Judy/MPLABXProjects/Interface16.X/dist/default/production/Interface16.X.production.cof
+Mar 26, 2014 2:25:47 AM
+
+---  /Users/Judy/MPLABXProjects/Interface16.X/main.asm  -------------------------------------------------
+                                                  1:     ;*******************************************************************
+                                                  2:     ; User Interface
+                                                  3:     ; Assembler : mpasm.exe
+                                                  4:     ; Linker    : mplink.exe
+                                                  5:     ; Written By : Judy Shen
+                                                  6:     ;*******************************************************************
+                                                  7:     
+                                                  8:           list p=16f877                 ; list directive to define processor
+                                                  9:           #include <p16f877.inc>        ; processor specific variable definitions
+                                                  10:          #include <LCD.inc>
+                                                  11:          #include <rtc_macros.inc>
+                                                  12:          __CONFIG _CP_OFF & _WDT_OFF & _BODEN_ON & _PWRTE_ON & _HS_OSC & _WRT_ENABLE_ON & _CPD_OFF & _LVP_OFF
+                                                  13:    
+                                                  14:    	cblock	0x20
+                                                  15:    		COUNTH ;0x20
+                                                  16:    		COUNTM ;0x21
+                                                  17:    		COUNTL ;0x22
+                                                  18:    		Table_Counter ;0x23
+                                                  19:    		lcd_tmp ;0x24
+                                                  20:            key_temp ;0x25
+                                                  21:            test ;0x26
+                                                  22:            rtc1 ;0x27
+                                                  23:            rtc2 ;0x28
+                                                  24:            com ;0x29
+                                                  25:            dat ;0x2a
+                                                  26:            lcd_d1 ;0x2b
+                                                  27:            lcd_d2 ;0x2c
+                                                  28:            bcd ;0x2d
+                                                  29:            count ;0x2e
+                                                  30:            show_data ;02f
+                                                  31:            w_temp ;0x30
+                                                  32:            status_temp ;0x31
+                                                  33:            pass ;0x32
+                                                  34:            flickerfail ;0x33
+                                                  35:            ledfail ;0x34
+                                                  36:            runtime ;0x35
+                                                  37:            timercount ;0x36
+                                                  38:            ones ;0x37
+                                                  39:            tens ;0x38
+                                                  40:            huns ;0x39
+                                                  41:            count_temp ;0x3a
+                                                  42:            run_temp ;0x3b
+                                                  43:            ADDRL ;0x3c
+                                                  44:            DATAL ;0x3d
+                                                  45:            VALUEL ;0x3e
+                                                  46:            signal ;0x3f
+                                                  47:            none ;0x40
+                                                  48:            light1 ;0x41
+                                                  49:            light2 ;0x42
+                                                  50:            light3 ;0x43
+                                                  51:            light4 ;0x44
+                                                  52:            light5 ;0x45
+                                                  53:            light6 ;0x46
+                                                  54:            light7 ;0x47
+                                                  55:            light8 ;0x48
+                                                  56:            light9 ;0x49
+                                                  57:            result_temp;0x4a
+                                                  58:            passT  ;0x4b
+                                                  59:            flickerfailT ;0x4c
+                                                  60:            ledfailT    ;0x4d
+                                                  61:            noneT       ;0x4e
+                                                  62:    
+                                                  63:    
+                                                  64:    	endc
+                                                  65:    
+                                                  66:    	;Declare constants for pin assignments (LCD on PORTD)
+                                                  67:    
+                                                  68:    		#define	RS 	PORTD,2
+                                                  69:    		#define	E 	PORTD,3
+                                                  70:    
+                                                  71:            ORG       0x0000     ;RESET vector must always be at 0x00
+0000  018A     CLRF PCLATH                        72:            clrf PCLATH
+0001  2805     GOTO 0x5                           73:            goto      init       ;Just jump to the main code section.
+                                                  74:    
+                                                  75:            ORG 0x004
+0004  2D84     GOTO 0x584                         76:            goto ISR
+                                                  77:    init
+                                                  78:             ;initialize timer interrupt
+0005  178B     BSF INTCON, 0x7                    79:             bsf    INTCON, GIE
+0006  1683     BSF STATUS, 0x5                    80:             banksel    OPTION_REG
+0007  1303     BCF STATUS, 0x6
+0008  0181     CLRF TMR0                          81:             clrf       TMR0
+0009  30C7     MOVLW 0xC7                         82:             movlw      B'11000111'
+000A  0081     MOVWF TMR0                         83:             movwf      OPTION_REG
+                                                  84:    
+000B  1283     BCF STATUS, 0x5                    85:             bcf        STATUS, RP0
+                                                  86:    
+                                                  87:             ;init timer
+000C  3026     MOVLW 0x26                         88:             movlw      D'38'
+000D  00B6     MOVWF 0x36                         89:             movwf      timercount
+000E  01B5     CLRF 0x35                          90:             clrf       runtime
+                                                  91:    
+000F  1683     BSF STATUS, 0x5                    92:             bsf       STATUS,RP0     ; select bank 1
+0010  0185     CLRF PORTA                         93:             clrf      TRISA
+0011  1605     BSF PORTA, 0x4                     94:             bsf       TRISA, 4
+0012  30F3     MOVLW 0xF3                         95:             movlw     b'11110011'    ; Set required keypad inputs
+0013  0086     MOVWF PORTB                        96:             movwf     TRISB
+0014  0187     CLRF PORTC                         97:             clrf      TRISC          ; All port C is output
+0015  0188     CLRF PORTD                         98:             clrf      TRISD          ; All port D is output
+                                                  99:    
+                                                  100:            ;Set SDA and SCL to high-Z first as required for I2C
+0016  1607     BSF PORTC, 0x4                     101:   		 bsf	   TRISC,4
+0017  1587     BSF PORTC, 0x3                     102:   		 bsf	   TRISC,3
+                                                  103:   
+0018  1283     BCF STATUS, 0x5                    104:            bcf       STATUS,RP0     ; select bank 0
+0019  0185     CLRF PORTA                         105:            clrf      PORTA
+001A  0186     CLRF PORTB                         106:            clrf      PORTB
+001B  0187     CLRF PORTC                         107:            clrf      PORTC
+001C  0188     CLRF PORTD                         108:            clrf      PORTD
+001D  26AF     CALL 0x6AF                         109:   		 call 	   i2c_common_setup
+                                                  110:   
+001E  20F9     CALL 0xF9                          111:            call      InitLCD    ;Initialize the LCD (code in lcd.asm; imported by lcd.inc)
+                                                  112:   
+                                                  113:            ; init EEPROM
+001F  3010     MOVLW 0x10                         114:            movlw    0x10
+0020  00BC     MOVWF 0x3C                         115:            movwf    ADDRL
+0021  01BD     CLRF 0x3D                          116:            clrf     DATAL
+0022  01BE     CLRF 0x3E                          117:            clrf     VALUEL
+                                                  118:   
+                                                  119:   ;MAIN PROGRAM
+                                                  120:   ;***************************************
+0023  01A3     CLRF 0x23                          121:   Main	Display		Welcome_Msg
+0024  0103     CLRW
+0025  0823     MOVF 0x23, W
+0026  2044     CALL 0x44
+0027  3A00     XORLW 0x0
+0028  1903     BTFSC STATUS, 0x2
+0029  282D     GOTO 0x2D
+002A  24F0     CALL 0x4F0
+002B  0AA3     INCF 0x23, F
+002C  2825     GOTO 0x25
+002D  24B1     CALL 0x4B1                         122:           call        HalfS
+002E  24B1     CALL 0x4B1                         123:           call        HalfS
+002F  24B1     CALL 0x4B1                         124:           call        HalfS
+0030  20F6     CALL 0xF6                          125:           call        Clear_Display
+                                                  126:   
+                                                  127:   Start_Test
+0031  01A3     CLRF 0x23                          128:      		Display		Menu
+0032  0103     CLRW
+0033  0823     MOVF 0x23, W
+0034  2056     CALL 0x56
+0035  3A00     XORLW 0x0
+0036  1903     BTFSC STATUS, 0x2
+0037  283B     GOTO 0x3B
+0038  24F0     CALL 0x4F0
+0039  0AA3     INCF 0x23, F
+003A  2833     GOTO 0x33
+                                                  129:   
+003B  3018     MOVLW 0x18                         130:   Test     movlw		b'00011000'		;Move to the left
+003C  24E1     CALL 0x4E1                         131:            call		WR_INS
+003D  24B1     CALL 0x4B1                         132:            call		HalfS    ;Wait until data is available from the keypad
+003E  1C86     BTFSS PORTB, 0x1                   133:            btfss		PORTB,1
+003F  283B     GOTO 0x3B                          134:            goto		Test
+                                                  135:   
+                                                  136:   
+0040  0E06     SWAPF PORTB, W                     137:            swapf		PORTB,W     ;Read PortB<7:4> into W<3:0>
+0041  390F     ANDLW 0xF                          138:            andlw		0x0F
+0042  2117     CALL 0x117                         139:            call       check
+0043  2831     GOTO 0x31                          140:            goto       Start_Test
+                                                  141:   
+                                                  142:   ; Look up table
+                                                  143:   ;***************************************
+                                                  144:   
+                                                  145:   Welcome_Msg
+0044  0782     ADDWF PCL, F                       146:   		addwf	PCL,F
+0045  3457     RETLW 0x57                         147:   		dt		"Welcome!", 0
+0046  3465     RETLW 0x65
+0047  346C     RETLW 0x6C
+0048  3463     RETLW 0x63
+0049  346F     RETLW 0x6F
+004A  346D     RETLW 0x6D
+004B  3465     RETLW 0x65
+004C  3421     RETLW 0x21
+004D  3400     RETLW 0x0
+                                                  148:   
+                                                  149:   Paused
+004E  0782     ADDWF PCL, F                       150:   		addwf	PCL,F
+004F  3450     RETLW 0x50                         151:   		dt		"Paused", 0
+0050  3461     RETLW 0x61
+0051  3475     RETLW 0x75
+0052  3473     RETLW 0x73
+0053  3465     RETLW 0x65
+0054  3464     RETLW 0x64
+0055  3400     RETLW 0x0
+                                                  152:   
+                                                  153:   Menu
+0056  0782     ADDWF PCL, F                       154:   		addwf	PCL,F
+0057  3441     RETLW 0x41                         155:   		dt		"A:Start, ", "B:PLog, ", "C:Time",0
+0058  343A     RETLW 0x3A
+0059  3453     RETLW 0x53
+005A  3474     RETLW 0x74
+005B  3461     RETLW 0x61
+005C  3472     RETLW 0x72
+005D  3474     RETLW 0x74
+005E  342C     RETLW 0x2C
+005F  3420     RETLW 0x20
+0060  3442     RETLW 0x42
+0061  343A     RETLW 0x3A
+0062  3450     RETLW 0x50
+0063  344C     RETLW 0x4C
+0064  346F     RETLW 0x6F
+0065  3467     RETLW 0x67
+0066  342C     RETLW 0x2C
+0067  3420     RETLW 0x20
+0068  3443     RETLW 0x43
+0069  343A     RETLW 0x3A
+006A  3454     RETLW 0x54
+006B  3469     RETLW 0x69
+006C  346D     RETLW 0x6D
+006D  3465     RETLW 0x65
+006E  3400     RETLW 0x0
+                                                  156:   
+                                                  157:   Run
+006F  0782     ADDWF PCL, F                       158:   		addwf	PCL,F
+0070  3454     RETLW 0x54                         159:   		dt		"Testing Candles", 0
+0071  3465     RETLW 0x65
+0072  3473     RETLW 0x73
+0073  3474     RETLW 0x74
+0074  3469     RETLW 0x69
+0075  346E     RETLW 0x6E
+0076  3467     RETLW 0x67
+0077  3420     RETLW 0x20
+0078  3443     RETLW 0x43
+0079  3461     RETLW 0x61
+007A  346E     RETLW 0x6E
+007B  3464     RETLW 0x64
+007C  346C     RETLW 0x6C
+007D  3465     RETLW 0x65
+007E  3473     RETLW 0x73
+007F  3400     RETLW 0x0
+                                                  160:   SW_ON
+0080  0782     ADDWF PCL, F                       161:   		addwf	PCL,F
+0081  3453     RETLW 0x53                         162:   		dt		"Switch On", 0
+0082  3477     RETLW 0x77
+0083  3469     RETLW 0x69
+0084  3474     RETLW 0x74
+0085  3463     RETLW 0x63
+0086  3468     RETLW 0x68
+0087  3420     RETLW 0x20
+0088  344F     RETLW 0x4F
+0089  346E     RETLW 0x6E
+008A  3400     RETLW 0x0
+                                                  163:   
+                                                  164:   SW_OFF
+008B  0782     ADDWF PCL, F                       165:           addwf   PCL, F
+008C  3453     RETLW 0x53                         166:           dt      "Switch Off", 0
+008D  3477     RETLW 0x77
+008E  3469     RETLW 0x69
+008F  3474     RETLW 0x74
+0090  3463     RETLW 0x63
+0091  3468     RETLW 0x68
+0092  3420     RETLW 0x20
+0093  344F     RETLW 0x4F
+0094  3466     RETLW 0x66
+0095  3466     RETLW 0x66
+0096  3400     RETLW 0x0
+                                                  167:   
+                                                  168:   Done
+0097  0782     ADDWF PCL, F                       169:   		addwf	PCL,F
+0098  3446     RETLW 0x46                         170:   		dt		"Finished Testing", 0
+0099  3469     RETLW 0x69
+009A  346E     RETLW 0x6E
+009B  3469     RETLW 0x69
+009C  3473     RETLW 0x73
+009D  3468     RETLW 0x68
+009E  3465     RETLW 0x65
+009F  3464     RETLW 0x64
+00A0  3420     RETLW 0x20
+00A1  3454     RETLW 0x54
+00A2  3465     RETLW 0x65
+00A3  3473     RETLW 0x73
+00A4  3474     RETLW 0x74
+00A5  3469     RETLW 0x69
+00A6  346E     RETLW 0x6E
+00A7  3467     RETLW 0x67
+00A8  3400     RETLW 0x0
+                                                  171:   
+                                                  172:   Runtime
+00A9  0782     ADDWF PCL, F                       173:   		addwf	PCL,F
+00AA  3452     RETLW 0x52                         174:   		dt		"Runtime: ", 0
+00AB  3475     RETLW 0x75
+00AC  346E     RETLW 0x6E
+00AD  3474     RETLW 0x74
+00AE  3469     RETLW 0x69
+00AF  346D     RETLW 0x6D
+00B0  3465     RETLW 0x65
+00B1  343A     RETLW 0x3A
+00B2  3420     RETLW 0x20
+00B3  3400     RETLW 0x0
+                                                  175:   
+                                                  176:   PMem
+00B4  0782     ADDWF PCL, F                       177:   		addwf	PCL,F
+00B5  3450     RETLW 0x50                         178:   		dt		"Permanent Log", 0
+00B6  3465     RETLW 0x65
+00B7  3472     RETLW 0x72
+00B8  346D     RETLW 0x6D
+00B9  3461     RETLW 0x61
+00BA  346E     RETLW 0x6E
+00BB  3465     RETLW 0x65
+00BC  346E     RETLW 0x6E
+00BD  3474     RETLW 0x74
+00BE  3420     RETLW 0x20
+00BF  344C     RETLW 0x4C
+00C0  346F     RETLW 0x6F
+00C1  3467     RETLW 0x67
+00C2  3400     RETLW 0x0
+                                                  179:   PMenu
+00C3  0782     ADDWF PCL, F                       180:           addwf   PCL, F
+00C4  3453     RETLW 0x53                         181:           dt      "Select Trial", 0
+00C5  3465     RETLW 0x65
+00C6  346C     RETLW 0x6C
+00C7  3465     RETLW 0x65
+00C8  3463     RETLW 0x63
+00C9  3474     RETLW 0x74
+00CA  3420     RETLW 0x20
+00CB  3454     RETLW 0x54
+00CC  3472     RETLW 0x72
+00CD  3469     RETLW 0x69
+00CE  3461     RETLW 0x61
+00CF  346C     RETLW 0x6C
+00D0  3400     RETLW 0x0
+                                                  182:   
+                                                  183:   RTC
+00D1  0782     ADDWF PCL, F                       184:   		addwf	PCL,F
+00D2  3454     RETLW 0x54                         185:   		dt		"Time:", 0
+00D3  3469     RETLW 0x69
+00D4  346D     RETLW 0x6D
+00D5  3465     RETLW 0x65
+00D6  343A     RETLW 0x3A
+00D7  3400     RETLW 0x0
+                                                  186:   
+                                                  187:   Writing
+00D8  0782     ADDWF PCL, F                       188:           addwf   PCL, F
+00D9  3457     RETLW 0x57                         189:           dt      "Writing EE", 0
+00DA  3472     RETLW 0x72
+00DB  3469     RETLW 0x69
+00DC  3474     RETLW 0x74
+00DD  3469     RETLW 0x69
+00DE  346E     RETLW 0x6E
+00DF  3467     RETLW 0x67
+00E0  3420     RETLW 0x20
+00E1  3445     RETLW 0x45
+00E2  3445     RETLW 0x45
+00E3  3400     RETLW 0x0
+                                                  190:   
+                                                  191:   Trial
+00E4  0782     ADDWF PCL, F                       192:           addwf   PCL, F
+00E5  3450     RETLW 0x50                         193:           dt      "P: FF: LF: N:", 0
+00E6  343A     RETLW 0x3A
+00E7  3420     RETLW 0x20
+00E8  3446     RETLW 0x46
+00E9  3446     RETLW 0x46
+00EA  343A     RETLW 0x3A
+00EB  3420     RETLW 0x20
+00EC  344C     RETLW 0x4C
+00ED  3446     RETLW 0x46
+00EE  343A     RETLW 0x3A
+00EF  3420     RETLW 0x20
+00F0  344E     RETLW 0x4E
+00F1  343A     RETLW 0x3A
+00F2  3400     RETLW 0x0
+                                                  194:   
+                                                  195:   
+                                                  196:   ;***************************************
+                                                  197:   ; Helper Subrountines
+                                                  198:   ;***************************************
+                                                  199:   
+                                                  200:   Switch_Lines
+00F3  30C0     MOVLW 0xC0                         201:   		movlw	B'11000000'
+00F4  24E1     CALL 0x4E1                         202:   		call	WR_INS
+00F5  0008     RETURN                             203:   		return
+                                                  204:   
+                                                  205:   Clear_Display
+00F6  3001     MOVLW 0x1                          206:   		movlw	B'00000001'
+00F7  24E1     CALL 0x4E1                         207:   		call	WR_INS
+00F8  0008     RETURN                             208:   		return
+                                                  209:   
+                                                  210:   InitLCD
+00F9  1283     BCF STATUS, 0x5                    211:   	bcf STATUS,RP0
+00FA  1588     BSF PORTD, 0x3                     212:   	bsf E     ;E default high
+                                                  213:   
+                                                  214:   	;Wait for LCD POR to finish (~15ms)
+00FB  257B     CALL 0x57B                         215:   	call lcdLongDelay
+00FC  257B     CALL 0x57B                         216:   	call lcdLongDelay
+00FD  257B     CALL 0x57B                         217:   	call lcdLongDelay
+                                                  218:   
+                                                  219:   	;Ensure 8-bit mode first (no way to immediately guarantee 4-bit mode)
+                                                  220:   	; -> Send b'0011' 3 times
+00FE  3033     MOVLW 0x33                         221:   	movlw	b'00110011'
+00FF  24E1     CALL 0x4E1                         222:   	call	WR_INS
+0100  257B     CALL 0x57B                         223:   	call lcdLongDelay
+0101  257B     CALL 0x57B                         224:   	call lcdLongDelay
+0102  3032     MOVLW 0x32                         225:   	movlw	b'00110010'
+0103  24E1     CALL 0x4E1                         226:   	call	WR_INS
+0104  257B     CALL 0x57B                         227:   	call lcdLongDelay
+0105  257B     CALL 0x57B                         228:   	call lcdLongDelay
+                                                  229:   
+                                                  230:   	; 4 bits, 2 lines, 5x7 dots
+0106  3028     MOVLW 0x28                         231:   	movlw	b'00101000'
+0107  24E1     CALL 0x4E1                         232:   	call	WR_INS
+0108  257B     CALL 0x57B                         233:   	call lcdLongDelay
+0109  257B     CALL 0x57B                         234:   	call lcdLongDelay
+                                                  235:   
+                                                  236:   	; display on/off
+010A  300C     MOVLW 0xC                          237:   	movlw	b'00001100'
+010B  24E1     CALL 0x4E1                         238:   	call	WR_INS
+010C  257B     CALL 0x57B                         239:   	call lcdLongDelay
+010D  257B     CALL 0x57B                         240:   	call lcdLongDelay
+                                                  241:   
+                                                  242:   	; Entry mode
+010E  3006     MOVLW 0x6                          243:   	movlw	b'00000110'
+010F  24E1     CALL 0x4E1                         244:   	call	WR_INS
+0110  257B     CALL 0x57B                         245:   	call lcdLongDelay
+0111  257B     CALL 0x57B                         246:   	call lcdLongDelay
+                                                  247:   
+                                                  248:   	; Clear ram
+0112  3001     MOVLW 0x1                          249:   	movlw	b'00000001'
+0113  24E1     CALL 0x4E1                         250:   	call	WR_INS
+0114  257B     CALL 0x57B                         251:   	call lcdLongDelay
+0115  257B     CALL 0x57B                         252:   	call lcdLongDelay
+0116  0008     RETURN                             253:   	return
+                                                  254:   
+                                                  255:   ;helper subroutines
+                                                  256:   ;function to check for keyboard input
+                                                  257:   check
+0117  00A5     MOVWF 0x25                         258:       movwf key_temp
+                                                  259:   
+                                                  260:   check_A
+0118  3A03     XORLW 0x3                          261:       xorlw   D'3'
+0119  1D03     BTFSS STATUS, 0x2                  262:       btfss   STATUS, Z
+011A  295D     GOTO 0x15D                         263:           goto    check_B
+                                                  264:   
+011B  20F6     CALL 0xF6                          265:       call Clear_Display
+011C  01A3     CLRF 0x23                          266:       Display Run
+011D  0103     CLRW
+011E  0823     MOVF 0x23, W
+011F  206F     CALL 0x6F
+0120  3A00     XORLW 0x0
+0121  1903     BTFSC STATUS, 0x2
+0122  2926     GOTO 0x126
+0123  24F0     CALL 0x4F0
+0124  0AA3     INCF 0x23, F
+0125  291E     GOTO 0x11E
+0126  24B1     CALL 0x4B1                         267:       call    HalfS
+0127  20F6     CALL 0xF6                          268:       call Clear_Display
+0128  247F     CALL 0x47F                         269:       call    Motor_On
+0129  168B     BSF INTCON, 0x5                    270:       bsf    INTCON, 5
+012A  2184     CALL 0x184                         271:       call    count_down
+012B  128B     BCF INTCON, 0x5                    272:       bcf    INTCON, 5
+012C  20F6     CALL 0xF6                          273:       call Clear_Display
+012D  249A     CALL 0x49A                         274:       call    Motor_Off
+                                                  275:   
+012E  01A3     CLRF 0x23                          276:       Display Done
+012F  0103     CLRW
+0130  0823     MOVF 0x23, W
+0131  2097     CALL 0x97
+0132  3A00     XORLW 0x0
+0133  1903     BTFSC STATUS, 0x2
+0134  2938     GOTO 0x138
+0135  24F0     CALL 0x4F0
+0136  0AA3     INCF 0x23, F
+0137  2930     GOTO 0x130
+0138  20F3     CALL 0xF3                          277:       call Switch_Lines
+0139  01A3     CLRF 0x23                          278:       Display Runtime 
+013A  0103     CLRW
+013B  0823     MOVF 0x23, W
+013C  20A9     CALL 0xA9
+013D  3A00     XORLW 0x0
+013E  1903     BTFSC STATUS, 0x2
+013F  2943     GOTO 0x143
+0140  24F0     CALL 0x4F0
+0141  0AA3     INCF 0x23, F
+0142  293B     GOTO 0x13B
+0143  2501     CALL 0x501                         279:       call Convert
+0144  01B5     CLRF 0x35                          280:       clrf    runtime
+0145  25DE     CALL 0x5DE                         281:       call    shift_EE
+                                                  282:       ;writing run info into EEPROM
+0146  3010     MOVLW 0x10                         283:       movlw   0x10
+0147  00BC     MOVWF 0x3C                         284:       movwf   ADDRL
+0148  0832     MOVF 0x32, W                       285:       movf    pass, VALUEL
+0149  00BE     MOVWF 0x3E                         286:       movwf   VALUEL
+014A  2598     CALL 0x598                         287:       call    write_EE
+                                                  288:   
+014B  0ABC     INCF 0x3C, F                       289:       incf    ADDRL
+014C  0833     MOVF 0x33, W                       290:       movf    flickerfail, VALUEL
+014D  00BE     MOVWF 0x3E                         291:       movwf   VALUEL
+014E  2598     CALL 0x598                         292:       call    write_EE
+014F  0ABC     INCF 0x3C, F                       293:       incf    ADDRL
+                                                  294:   
+0150  0834     MOVF 0x34, W                       295:       movf    ledfail, VALUEL
+0151  00BE     MOVWF 0x3E                         296:       movwf   VALUEL
+0152  2598     CALL 0x598                         297:       call    write_EE
+0153  0ABC     INCF 0x3C, F                       298:       incf    ADDRL
+                                                  299:   
+0154  0840     MOVF 0x40, W                       300:       movf    none, VALUEL
+0155  00BE     MOVWF 0x3E                         301:       movwf   VALUEL
+0156  2598     CALL 0x598                         302:       call    write_EE
+0157  2416     CALL 0x416                         303:       call    wait
+0158  20F6     CALL 0xF6                          304:       call Clear_Display
+                                                  305:       ;can check previous run trials
+0159  221C     CALL 0x21C                         306:       call results_access
+015A  2416     CALL 0x416                         307:       call wait
+                                                  308:   
+015B  20F6     CALL 0xF6                          309:       call Clear_Display
+015C  0008     RETURN                             310:       return
+                                                  311:   
+                                                  312:   check_B
+015D  0825     MOVF 0x25, W                       313:       movf key_temp, W
+015E  3A07     XORLW 0x7                          314:       xorlw D'7'
+015F  1D03     BTFSS STATUS, 0x2                  315:       btfss STATUS, Z
+0160  297A     GOTO 0x17A                         316:           goto check_C
+0161  20F6     CALL 0xF6                          317:       call Clear_Display
+0162  01A3     CLRF 0x23                          318:       Display PMem
+0163  0103     CLRW
+0164  0823     MOVF 0x23, W
+0165  20B4     CALL 0xB4
+0166  3A00     XORLW 0x0
+0167  1903     BTFSC STATUS, 0x2
+0168  296C     GOTO 0x16C
+0169  24F0     CALL 0x4F0
+016A  0AA3     INCF 0x23, F
+016B  2964     GOTO 0x164
+016C  20F3     CALL 0xF3                          319:       call Switch_Lines
+016D  01A3     CLRF 0x23                          320:       Display PMenu
+016E  0103     CLRW
+016F  0823     MOVF 0x23, W
+0170  20C3     CALL 0xC3
+0171  3A00     XORLW 0x0
+0172  1903     BTFSC STATUS, 0x2
+0173  2977     GOTO 0x177
+0174  24F0     CALL 0x4F0
+0175  0AA3     INCF 0x23, F
+0176  296F     GOTO 0x16F
+0177  22CC     CALL 0x2CC                         321:       call pmenu_access
+0178  20F6     CALL 0xF6                          322:       call Clear_Display
+0179  0008     RETURN                             323:       return
+                                                  324:   
+                                                  325:   check_C
+017A  0825     MOVF 0x25, W                       326:       movf key_temp, W
+017B  3A0B     XORLW 0xB                          327:       xorlw D'11'
+017C  1D03     BTFSS STATUS, 0x2                  328:       btfss STATUS, Z
+017D  2982     GOTO 0x182                         329:           goto Other_wise
+017E  20F6     CALL 0xF6                          330:       call Clear_Display
+017F  241A     CALL 0x41A                         331:       call show_RTC
+0180  20F6     CALL 0xF6                          332:       call Clear_Display
+0181  0008     RETURN                             333:       return
+                                                  334:   
+                                                  335:   Other_wise
+0182  20F6     CALL 0xF6                          336:       call Clear_Display
+0183  0008     RETURN                             337:       return
+                                                  338:   
+                                                  339:   
+                                                  340:   count_down
+0184  01AF     CLRF 0x2F                          341:           clrf show_data
+0185  01B2     CLRF 0x32                          342:           clrf pass
+0186  01B3     CLRF 0x33                          343:           clrf flickerfail
+0187  01B4     CLRF 0x34                          344:           clrf ledfail
+0188  01C0     CLRF 0x40                          345:           clrf none
+0189  01C1     CLRF 0x41                          346:           clrf light1
+018A  01C2     CLRF 0x42                          347:           clrf light2
+018B  01C3     CLRF 0x43                          348:           clrf light3
+018C  01C4     CLRF 0x44                          349:           clrf light4
+018D  01C5     CLRF 0x45                          350:           clrf light5
+018E  01C6     CLRF 0x46                          351:           clrf light6
+018F  01C7     CLRF 0x47                          352:           clrf light7
+0190  01C8     CLRF 0x48                          353:           clrf light8
+0191  01C9     CLRF 0x49                          354:           clrf light9
+0192  01A3     CLRF 0x23                          355:           Display Run
+0193  0103     CLRW
+0194  0823     MOVF 0x23, W
+0195  206F     CALL 0x6F
+0196  3A00     XORLW 0x0
+0197  1903     BTFSC STATUS, 0x2
+0198  299C     GOTO 0x19C
+0199  24F0     CALL 0x4F0
+019A  0AA3     INCF 0x23, F
+019B  2994     GOTO 0x194
+                                                  356:   
+                                                  357:   count_loop
+019C  3000     MOVLW 0x0                          358:           movlw b'00000000'
+019D  0085     MOVWF PORTA                        359:           movwf PORTA
+019E  21CA     CALL 0x1CA                         360:           call Check_Flicker
+019F  084A     MOVF 0x4A, W                       361:           movf result_temp, w
+01A0  00C1     MOVWF 0x41                         362:           movwf light1
+                                                  363:   
+01A1  3001     MOVLW 0x1                          364:           movlw b'00000001'
+01A2  0085     MOVWF PORTA                        365:           movwf PORTA
+01A3  21CA     CALL 0x1CA                         366:           call Check_Flicker
+01A4  084A     MOVF 0x4A, W                       367:           movf result_temp, w
+01A5  00C2     MOVWF 0x42                         368:           movwf light2
+                                                  369:   
+01A6  3002     MOVLW 0x2                          370:           movlw b'00000010'
+01A7  0085     MOVWF PORTA                        371:           movwf PORTA
+01A8  21CA     CALL 0x1CA                         372:           call Check_Flicker
+01A9  084A     MOVF 0x4A, W                       373:           movf result_temp, w
+01AA  00C3     MOVWF 0x43                         374:           movwf light3
+                                                  375:   
+01AB  3003     MOVLW 0x3                          376:           movlw b'00000011'
+01AC  0085     MOVWF PORTA                        377:           movwf PORTA
+01AD  21CA     CALL 0x1CA                         378:           call Check_Flicker
+01AE  084A     MOVF 0x4A, W                       379:           movf result_temp, w
+01AF  00C4     MOVWF 0x44                         380:           movwf light4
+                                                  381:   
+01B0  3004     MOVLW 0x4                          382:           movlw b'00000100'
+01B1  0085     MOVWF PORTA                        383:           movwf PORTA
+01B2  21CA     CALL 0x1CA                         384:           call Check_Flicker
+01B3  084A     MOVF 0x4A, W                       385:           movf result_temp, w
+01B4  00C5     MOVWF 0x45                         386:           movwf light5
+                                                  387:   
+01B5  3005     MOVLW 0x5                          388:           movlw b'00000101'
+01B6  0085     MOVWF PORTA                        389:           movwf PORTA
+01B7  21CA     CALL 0x1CA                         390:           call Check_Flicker
+01B8  084A     MOVF 0x4A, W                       391:           movf result_temp, w
+01B9  00C6     MOVWF 0x46                         392:           movwf light6
+                                                  393:   
+01BA  3006     MOVLW 0x6                          394:           movlw b'00000110'
+01BB  0085     MOVWF PORTA                        395:           movwf PORTA
+01BC  21CA     CALL 0x1CA                         396:           call Check_Flicker
+01BD  084A     MOVF 0x4A, W                       397:           movf result_temp, w
+01BE  00C7     MOVWF 0x47                         398:           movwf light7
+                                                  399:   
+01BF  3007     MOVLW 0x7                          400:           movlw b'00000111'
+01C0  0085     MOVWF PORTA                        401:           movwf PORTA
+01C1  21CA     CALL 0x1CA                         402:           call Check_Flicker
+01C2  084A     MOVF 0x4A, W                       403:           movf result_temp, w
+01C3  00C8     MOVWF 0x48                         404:           movwf light8
+                                                  405:   
+01C4  3008     MOVLW 0x8                          406:           movlw b'00001000'
+01C5  0085     MOVWF PORTA                        407:           movwf PORTA
+01C6  21CA     CALL 0x1CA                         408:           call Check_Flicker
+01C7  084A     MOVF 0x4A, W                       409:           movf result_temp, w
+01C8  00C9     MOVWF 0x49                         410:           movwf light9
+01C9  0008     RETURN                             411:           return
+                                                  412:   
+                                                  413:   Check_Flicker
+01CA  24B1     CALL 0x4B1                         414:           call    HalfS 
+01CB  01BF     CLRF 0x3F                          415:           clrf    signal
+01CC  0805     MOVF PORTA, W                      416:           movf    PORTA, w
+01CD  3910     ANDLW 0x10                         417:           andlw   b'00010000'
+                                                  418:           ;movf    PORTB, w
+                                                  419:           ;andlw   b'00000001'
+01CE  1D03     BTFSS STATUS, 0x2                  420:           btfss   STATUS, Z
+01CF  29D5     GOTO 0x1D5                         421:                   goto flickertime
+01D0  0AC0     INCF 0x40, F                       422:           incf    none
+01D1  0AAF     INCF 0x2F, F                       423:           incf    show_data
+01D2  3001     MOVLW 0x1                          424:           movlw   b'00000001'
+01D3  00CA     MOVWF 0x4A                         425:           movwf   result_temp
+01D4  29F2     GOTO 0x1F2                         426:           goto    Display_results
+                                                  427:   
+                                                  428:   flickertime
+01D5  01BF     CLRF 0x3F                          429:           clrf    signal
+01D6  24B1     CALL 0x4B1                         430:           call    HalfS
+01D7  24B1     CALL 0x4B1                         431:           call    HalfS
+01D8  24B1     CALL 0x4B1                         432:           call    HalfS
+01D9  24B1     CALL 0x4B1                         433:           call    HalfS
+01DA  24B1     CALL 0x4B1                         434:           call    HalfS
+01DB  24B1     CALL 0x4B1                         435:           call    HalfS
+01DC  24B1     CALL 0x4B1                         436:           call    HalfS
+01DD  01CA     CLRF 0x4A                          437:           clrf    result_temp
+01DE  0AAF     INCF 0x2F, F                       438:           incf    show_data
+01DF  3080     MOVLW 0x80                         439:           movlw   B'10000000' ;move cursor to position H?4B?
+01E0  24E1     CALL 0x4E1                         440:           call    WR_INS
+01E1  1FBF     BTFSS 0x3F, 0x7                    441:           btfss   signal, 7
+01E2  29E7     GOTO 0x1E7                         442:               goto    notflickerfail
+01E3  0AB3     INCF 0x33, F                       443:           incf    flickerfail
+01E4  3004     MOVLW 0x4                          444:           movlw   b'00000100'
+01E5  00CA     MOVWF 0x4A                         445:           movwf   result_temp
+01E6  29F2     GOTO 0x1F2                         446:           goto    Display_results
+                                                  447:   
+                                                  448:   notflickerfail 
+01E7  083F     MOVF 0x3F, W                       449:           movf    signal, w
+01E8  39F8     ANDLW 0xF8                         450:           andlw   b'11111000'
+01E9  1D03     BTFSS STATUS, 0x2                  451:           btfss   STATUS, Z
+01EA  29EF     GOTO 0x1EF                         452:               goto    goodcandle
+01EB  0AB4     INCF 0x34, F                       453:           incf    ledfail
+01EC  3002     MOVLW 0x2                          454:           movlw   b'00000010'
+01ED  00CA     MOVWF 0x4A                         455:           movwf   result_temp
+01EE  29F2     GOTO 0x1F2                         456:           goto    Display_results
+                                                  457:   
+                                                  458:   goodcandle    
+01EF  0AB2     INCF 0x32, F                       459:           incf    pass
+01F0  3008     MOVLW 0x8                          460:           movlw   b'00001000'
+01F1  00CA     MOVWF 0x4A                         461:           movwf   result_temp
+                                                  462:   
+                                                  463:   Display_results
+01F2  20F6     CALL 0xF6                          464:           call Clear_Display
+01F3  082F     MOVF 0x2F, W                       465:           BCD_DisplayS show_data
+01F4  390F     ANDLW 0xF
+01F5  3E30     ADDLW 0x30
+01F6  24F0     CALL 0x4F0
+01F7  253E     CALL 0x53E                         466:           call    Convert1
+01F8  20F3     CALL 0xF3                          467:           call Switch_Lines
+01F9  01A3     CLRF 0x23                          468:           Display     Trial
+01FA  0103     CLRW
+01FB  0823     MOVF 0x23, W
+01FC  20E4     CALL 0xE4
+01FD  3A00     XORLW 0x0
+01FE  1903     BTFSC STATUS, 0x2
+01FF  2A03     GOTO 0x203
+0200  24F0     CALL 0x4F0
+0201  0AA3     INCF 0x23, F
+0202  29FB     GOTO 0x1FB
+0203  30C2     MOVLW 0xC2                         469:           movlw   B'11000010' ;move cursor to Pass
+0204  24E1     CALL 0x4E1                         470:           call    WR_INS
+0205  0832     MOVF 0x32, W                       471:           BCD_DisplayS pass
+0206  390F     ANDLW 0xF
+0207  3E30     ADDLW 0x30
+0208  24F0     CALL 0x4F0
+0209  30C6     MOVLW 0xC6                         472:           movlw   B'11000110' ;move cursor to 46
+020A  24E1     CALL 0x4E1                         473:           call    WR_INS
+020B  0833     MOVF 0x33, W                       474:           BCD_DisplayS flickerfail
+020C  390F     ANDLW 0xF
+020D  3E30     ADDLW 0x30
+020E  24F0     CALL 0x4F0
+020F  30CA     MOVLW 0xCA                         475:           movlw   B'11001010' ;move cursor to position 4A
+0210  24E1     CALL 0x4E1                         476:           call    WR_INS
+0211  0834     MOVF 0x34, W                       477:           BCD_DisplayS ledfail
+0212  390F     ANDLW 0xF
+0213  3E30     ADDLW 0x30
+0214  24F0     CALL 0x4F0
+0215  30CD     MOVLW 0xCD                         478:           movlw   B'11001101' ;move crusor to 4E
+0216  24E1     CALL 0x4E1                         479:           call    WR_INS
+0217  0840     MOVF 0x40, W                       480:           BCD_DisplayS none
+0218  390F     ANDLW 0xF
+0219  3E30     ADDLW 0x30
+021A  24F0     CALL 0x4F0
+021B  0008     RETURN                             481:           return
+                                                  482:   
+                                                  483:   results_access
+021C  3080     MOVLW 0x80                         484:            movlw   B'10000000' ;move cursor to Pass
+021D  24E1     CALL 0x4E1                         485:            call    WR_INS
+021E  01A3     CLRF 0x23                          486:            Display PMenu
+021F  0103     CLRW
+0220  0823     MOVF 0x23, W
+0221  20C3     CALL 0xC3
+0222  3A00     XORLW 0x0
+0223  1903     BTFSC STATUS, 0x2
+0224  2A28     GOTO 0x228
+0225  24F0     CALL 0x4F0
+0226  0AA3     INCF 0x23, F
+0227  2A20     GOTO 0x220
+                                                  487:    
+0228  24B1     CALL 0x4B1                         488:            call		HalfS    ;Wait until data is available from the keypad
+0229  1C86     BTFSS PORTB, 0x1                   489:            btfss		PORTB,1
+022A  2A1C     GOTO 0x21C                         490:            goto		results_access
+                                                  491:   
+022B  0E06     SWAPF PORTB, W                     492:            swapf		PORTB,W     ;Read PortB<7:4> into W<3:0>
+022C  390F     ANDLW 0xF                          493:            andlw		0x0F
+022D  00A5     MOVWF 0x25                         494:            movwf      key_temp
+                                                  495:   
+                                                  496:   lightone
+022E  3A00     XORLW 0x0                          497:            xorlw      D'0'
+022F  1D03     BTFSS STATUS, 0x2                  498:            btfss      STATUS, Z
+0230  2A3C     GOTO 0x23C                         499:               goto    lighttwo
+0231  0841     MOVF 0x41, W                       500:            movf       light1, w
+0232  00CA     MOVWF 0x4A                         501:            movwf      result_temp
+0233  20F3     CALL 0xF3                          502:            call       Switch_Lines
+0234  3031     MOVLW 0x31                         503:            movlw      "1"
+0235  24F0     CALL 0x4F0                         504:            call       WR_DATA
+0236  303A     MOVLW 0x3A                         505:            movlw      ":"
+0237  24F0     CALL 0x4F0                         506:            call       WR_DATA
+0238  22B5     CALL 0x2B5                         507:            call       display
+0239  24B1     CALL 0x4B1                         508:            call       HalfS
+023A  20F6     CALL 0xF6                          509:            call       Clear_Display
+023B  2A1C     GOTO 0x21C                         510:            goto       results_access
+                                                  511:   
+                                                  512:   lighttwo
+023C  0825     MOVF 0x25, W                       513:           movf key_temp, W
+023D  3A01     XORLW 0x1                          514:           xorlw       D'1'
+023E  1D03     BTFSS STATUS, 0x2                  515:           btfss       STATUS, Z
+023F  2A4B     GOTO 0x24B                         516:               goto    lightthree
+0240  0842     MOVF 0x42, W                       517:           movf        light2, w
+0241  00CA     MOVWF 0x4A                         518:           movwf       result_temp
+0242  20F3     CALL 0xF3                          519:           call        Switch_Lines
+0243  3032     MOVLW 0x32                         520:           movlw       "2"
+0244  24F0     CALL 0x4F0                         521:           call        WR_DATA
+0245  303A     MOVLW 0x3A                         522:           movlw       ":"
+0246  24F0     CALL 0x4F0                         523:           call        WR_DATA
+0247  22B5     CALL 0x2B5                         524:           call        display
+0248  24B1     CALL 0x4B1                         525:           call        HalfS
+0249  20F6     CALL 0xF6                          526:           call        Clear_Display
+024A  2A1C     GOTO 0x21C                         527:           goto        results_access
+                                                  528:   
+                                                  529:   lightthree 
+024B  0825     MOVF 0x25, W                       530:           movf key_temp, W
+024C  3A02     XORLW 0x2                          531:           xorlw       D'2'
+024D  1D03     BTFSS STATUS, 0x2                  532:           btfss       STATUS, Z
+024E  2A5A     GOTO 0x25A                         533:               goto    lightfour
+024F  0843     MOVF 0x43, W                       534:           movf        light3, w
+0250  00CA     MOVWF 0x4A                         535:           movwf       result_temp
+0251  20F3     CALL 0xF3                          536:           call        Switch_Lines
+0252  3033     MOVLW 0x33                         537:           movlw       "3"
+0253  24F0     CALL 0x4F0                         538:           call        WR_DATA
+0254  303A     MOVLW 0x3A                         539:           movlw       ":"
+0255  24F0     CALL 0x4F0                         540:           call        WR_DATA
+0256  22B5     CALL 0x2B5                         541:           call        display
+0257  24B1     CALL 0x4B1                         542:           call        HalfS
+0258  20F6     CALL 0xF6                          543:           call        Clear_Display
+0259  2A1C     GOTO 0x21C                         544:           goto        results_access
+                                                  545:   
+                                                  546:   lightfour
+025A  0825     MOVF 0x25, W                       547:           movf key_temp, W
+025B  3A04     XORLW 0x4                          548:           xorlw       D'4'
+025C  1D03     BTFSS STATUS, 0x2                  549:           btfss       STATUS, Z
+025D  2A69     GOTO 0x269                         550:               goto    lightfive
+025E  0844     MOVF 0x44, W                       551:           movf        light4, w
+025F  00CA     MOVWF 0x4A                         552:           movwf       result_temp
+0260  20F3     CALL 0xF3                          553:           call        Switch_Lines
+0261  3034     MOVLW 0x34                         554:           movlw       "4"
+0262  24F0     CALL 0x4F0                         555:           call        WR_DATA
+0263  303A     MOVLW 0x3A                         556:           movlw       ":"
+0264  24F0     CALL 0x4F0                         557:           call        WR_DATA
+0265  22B5     CALL 0x2B5                         558:           call        display
+0266  24B1     CALL 0x4B1                         559:           call        HalfS
+0267  20F6     CALL 0xF6                          560:           call        Clear_Display
+0268  2A1C     GOTO 0x21C                         561:           goto        results_access
+                                                  562:   
+                                                  563:   lightfive
+0269  0825     MOVF 0x25, W                       564:           movf key_temp, W
+026A  3A05     XORLW 0x5                          565:           xorlw       D'5'
+026B  1D03     BTFSS STATUS, 0x2                  566:           btfss       STATUS, Z
+026C  2A78     GOTO 0x278                         567:               goto    lightsix
+026D  0845     MOVF 0x45, W                       568:           movf       light5, w
+026E  00CA     MOVWF 0x4A                         569:           movwf      result_temp
+026F  20F3     CALL 0xF3                          570:           call        Switch_Lines
+0270  3035     MOVLW 0x35                         571:           movlw      "5"
+0271  24F0     CALL 0x4F0                         572:           call       WR_DATA
+0272  303A     MOVLW 0x3A                         573:           movlw      ":"
+0273  24F0     CALL 0x4F0                         574:           call       WR_DATA
+0274  22B5     CALL 0x2B5                         575:           call       display
+0275  24B1     CALL 0x4B1                         576:           call       HalfS
+0276  20F6     CALL 0xF6                          577:           call       Clear_Display
+0277  2A1C     GOTO 0x21C                         578:           goto       results_access
+                                                  579:   
+                                                  580:   lightsix
+0278  0825     MOVF 0x25, W                       581:           movf key_temp, W
+0279  3A06     XORLW 0x6                          582:           xorlw       D'6'
+027A  1D03     BTFSS STATUS, 0x2                  583:           btfss       STATUS, Z
+027B  2A87     GOTO 0x287                         584:               goto    lightseven
+027C  0846     MOVF 0x46, W                       585:            movf       light6, w
+027D  00CA     MOVWF 0x4A                         586:            movwf      result_temp
+027E  20F3     CALL 0xF3                          587:            call Switch_Lines
+027F  3036     MOVLW 0x36                         588:            movlw      "6"
+0280  24F0     CALL 0x4F0                         589:            call       WR_DATA
+0281  303A     MOVLW 0x3A                         590:            movlw      ":"
+0282  24F0     CALL 0x4F0                         591:            call       WR_DATA
+0283  22B5     CALL 0x2B5                         592:            call       display
+0284  24B1     CALL 0x4B1                         593:            call       HalfS
+0285  20F6     CALL 0xF6                          594:            call Clear_Display
+0286  2A1C     GOTO 0x21C                         595:            goto       results_access
+                                                  596:   
+                                                  597:   lightseven
+0287  0825     MOVF 0x25, W                       598:           movf key_temp, W
+0288  3A08     XORLW 0x8                          599:           xorlw       D'8'
+0289  1D03     BTFSS STATUS, 0x2                  600:           btfss       STATUS, Z
+028A  2A96     GOTO 0x296                         601:               goto    lighteight
+028B  0847     MOVF 0x47, W                       602:            movf       light7, w
+028C  00CA     MOVWF 0x4A                         603:            movwf      result_temp
+028D  20F3     CALL 0xF3                          604:            call Switch_Lines
+028E  3037     MOVLW 0x37                         605:            movlw      "7"
+028F  24F0     CALL 0x4F0                         606:            call       WR_DATA
+0290  303A     MOVLW 0x3A                         607:            movlw      ":"
+0291  24F0     CALL 0x4F0                         608:            call       WR_DATA
+0292  22B5     CALL 0x2B5                         609:            call       display
+0293  24B1     CALL 0x4B1                         610:            call       HalfS
+0294  20F6     CALL 0xF6                          611:            call Clear_Display
+0295  2A1C     GOTO 0x21C                         612:            goto       results_access
+                                                  613:   
+                                                  614:   lighteight
+0296  0825     MOVF 0x25, W                       615:           movf key_temp, W
+0297  3A09     XORLW 0x9                          616:           xorlw       D'9'
+0298  1D03     BTFSS STATUS, 0x2                  617:           btfss       STATUS, Z
+0299  2AA5     GOTO 0x2A5                         618:               goto    lightnine
+029A  0848     MOVF 0x48, W                       619:            movf       light8, w
+029B  00CA     MOVWF 0x4A                         620:            movwf      result_temp
+029C  20F3     CALL 0xF3                          621:            call Switch_Lines
+029D  3038     MOVLW 0x38                         622:            movlw      "8"
+029E  24F0     CALL 0x4F0                         623:            call       WR_DATA
+029F  303A     MOVLW 0x3A                         624:            movlw      ":"
+02A0  24F0     CALL 0x4F0                         625:            call       WR_DATA
+02A1  22B5     CALL 0x2B5                         626:            call       display
+02A2  24B1     CALL 0x4B1                         627:            call       HalfS
+02A3  20F6     CALL 0xF6                          628:            call Clear_Display
+02A4  2A1C     GOTO 0x21C                         629:            goto       results_access
+                                                  630:   
+                                                  631:   lightnine
+02A5  0825     MOVF 0x25, W                       632:           movf key_temp, W
+02A6  3A0A     XORLW 0xA                          633:           xorlw       D'10'
+02A7  1D03     BTFSS STATUS, 0x2                  634:           btfss       STATUS, Z
+02A8  2AB4     GOTO 0x2B4                         635:               goto    next
+02A9  0849     MOVF 0x49, W                       636:            movf       light9, w
+02AA  00CA     MOVWF 0x4A                         637:            movwf      result_temp
+02AB  20F3     CALL 0xF3                          638:            call Switch_Lines
+02AC  3039     MOVLW 0x39                         639:            movlw      "9"
+02AD  24F0     CALL 0x4F0                         640:            call       WR_DATA
+02AE  303A     MOVLW 0x3A                         641:            movlw      ":"
+02AF  24F0     CALL 0x4F0                         642:            call       WR_DATA
+02B0  22B5     CALL 0x2B5                         643:            call       display
+02B1  24B1     CALL 0x4B1                         644:            call       HalfS
+02B2  20F6     CALL 0xF6                          645:            call Clear_Display
+02B3  2A1C     GOTO 0x21C                         646:            goto       results_access
+                                                  647:   
+                                                  648:   next
+02B4  0008     RETURN                             649:            return
+                                                  650:   
+                                                  651:   
+                                                  652:   display
+02B5  1C4A     BTFSS 0x4A, 0x0                    653:           btfss   result_temp, 0
+02B6  2ABA     GOTO 0x2BA                         654:               goto notnone
+02B7  304E     MOVLW 0x4E                         655:           movlw "N"
+02B8  24F0     CALL 0x4F0                         656:           call WR_DATA
+02B9  2ACA     GOTO 0x2CA                         657:           goto end_display
+                                                  658:   
+                                                  659:   notnone
+02BA  1CCA     BTFSS 0x4A, 0x1                    660:           btfss   result_temp, 1
+02BB  2AC1     GOTO 0x2C1                         661:               goto notlf
+02BC  304C     MOVLW 0x4C                         662:           movlw "L"
+02BD  24F0     CALL 0x4F0                         663:           call WR_DATA
+02BE  3046     MOVLW 0x46                         664:           movlw "F"
+02BF  24F0     CALL 0x4F0                         665:           call WR_DATA
+02C0  2ACA     GOTO 0x2CA                         666:           goto end_display
+                                                  667:   
+                                                  668:   notlf
+02C1  1D4A     BTFSS 0x4A, 0x2                    669:           btfss   result_temp, 2
+02C2  2AC8     GOTO 0x2C8                         670:               goto notff
+02C3  3046     MOVLW 0x46                         671:           movlw "F"
+02C4  24F0     CALL 0x4F0                         672:           call WR_DATA
+02C5  3046     MOVLW 0x46                         673:           movlw "F"
+02C6  24F0     CALL 0x4F0                         674:           call WR_DATA
+02C7  2ACA     GOTO 0x2CA                         675:           goto end_display
+                                                  676:   notff
+02C8  3050     MOVLW 0x50                         677:           movlw "P"
+02C9  24F0     CALL 0x4F0                         678:           call WR_DATA
+                                                  679:   
+                                                  680:   end_display
+02CA  24B1     CALL 0x4B1                         681:           call HalfS
+02CB  0008     RETURN                             682:           return
+                                                  683:   
+                                                  684:   pmenu_access
+02CC  0186     CLRF PORTB                         685:            clrf       PORTB
+02CD  01A5     CLRF 0x25                          686:            clrf       key_temp
+02CE  24B1     CALL 0x4B1                         687:            call		HalfS    ;Wait until data is available from the keypad
+02CF  1C86     BTFSS PORTB, 0x1                   688:            btfss		PORTB,1
+02D0  2ACC     GOTO 0x2CC                         689:            goto		pmenu_access
+                                                  690:   
+02D1  0E06     SWAPF PORTB, W                     691:            swapf		PORTB,W     ;Read PortB<7:4> into W<3:0>
+02D2  390F     ANDLW 0xF                          692:            andlw		0x0F
+02D3  00A5     MOVWF 0x25                         693:            movwf      key_temp
+                                                  694:   
+                                                  695:   check_1
+02D4  0825     MOVF 0x25, W                       696:           movf key_temp, W
+02D5  3A00     XORLW 0x0                          697:           xorlw D'0'
+02D6  1D03     BTFSS STATUS, 0x2                  698:           btfss STATUS, Z
+02D7  2B14     GOTO 0x314                         699:               goto check_2
+02D8  20F6     CALL 0xF6                          700:           call Clear_Display
+02D9  3001     MOVLW 0x1                          701:           movlw H'01'
+02DA  00A4     MOVWF 0x24                         702:           movwf lcd_tmp
+02DB  0E24     SWAPF 0x24, W                      703:           BCD_Display lcd_tmp
+02DC  390F     ANDLW 0xF
+02DD  3E30     ADDLW 0x30
+02DE  24F0     CALL 0x4F0
+02DF  257B     CALL 0x57B
+02E0  0824     MOVF 0x24, W
+02E1  390F     ANDLW 0xF
+02E2  3E30     ADDLW 0x30
+02E3  24F0     CALL 0x4F0
+02E4  20F3     CALL 0xF3                          704:           call Switch_Lines
+02E5  01A3     CLRF 0x23                          705:           Display Trial
+02E6  0103     CLRW
+02E7  0823     MOVF 0x23, W
+02E8  20E4     CALL 0xE4
+02E9  3A00     XORLW 0x0
+02EA  1903     BTFSC STATUS, 0x2
+02EB  2AEF     GOTO 0x2EF
+02EC  24F0     CALL 0x4F0
+02ED  0AA3     INCF 0x23, F
+02EE  2AE7     GOTO 0x2E7
+02EF  3010     MOVLW 0x10                         706:           movlw    0x10
+02F0  00BC     MOVWF 0x3C                         707:           movwf    ADDRL
+02F1  22F4     CALL 0x2F4                         708:           call display_EE
+02F2  24B1     CALL 0x4B1                         709:           call HalfS
+02F3  2ACC     GOTO 0x2CC                         710:           goto pmenu_access
+                                                  711:   
+                                                  712:   display_EE
+02F4  25CA     CALL 0x5CA                         713:           call read_EE
+02F5  30C2     MOVLW 0xC2                         714:           movlw   B'11000010' ;move cursor to Pass
+02F6  24E1     CALL 0x4E1                         715:           call WR_INS
+02F7  083D     MOVF 0x3D, W                       716:           BCD_DisplayS DATAL
+02F8  390F     ANDLW 0xF
+02F9  3E30     ADDLW 0x30
+02FA  24F0     CALL 0x4F0
+02FB  30C6     MOVLW 0xC6                         717:           movlw   B'11000110' ;move cursor to 46
+02FC  24E1     CALL 0x4E1                         718:           call WR_INS
+02FD  0ABC     INCF 0x3C, F                       719:           incf ADDRL
+02FE  25CA     CALL 0x5CA                         720:           call read_EE
+02FF  083D     MOVF 0x3D, W                       721:           BCD_DisplayS DATAL
+0300  390F     ANDLW 0xF
+0301  3E30     ADDLW 0x30
+0302  24F0     CALL 0x4F0
+0303  30CA     MOVLW 0xCA                         722:           movlw   B'11001010' ;move cursor to position 4A
+0304  24E1     CALL 0x4E1                         723:           call WR_INS
+0305  0ABC     INCF 0x3C, F                       724:           incf ADDRL
+0306  25CA     CALL 0x5CA                         725:           call read_EE
+0307  083D     MOVF 0x3D, W                       726:           BCD_DisplayS DATAL
+0308  390F     ANDLW 0xF
+0309  3E30     ADDLW 0x30
+030A  24F0     CALL 0x4F0
+030B  30CD     MOVLW 0xCD                         727:           movlw   B'11001101' ;move cursor to position 4A
+030C  24E1     CALL 0x4E1                         728:           call WR_INS
+030D  0ABC     INCF 0x3C, F                       729:           incf ADDRL
+030E  25CA     CALL 0x5CA                         730:           call read_EE
+030F  083D     MOVF 0x3D, W                       731:           BCD_DisplayS DATAL
+0310  390F     ANDLW 0xF
+0311  3E30     ADDLW 0x30
+0312  24F0     CALL 0x4F0
+0313  0008     RETURN                             732:           return 
+                                                  733:   
+                                                  734:   check_2
+0314  0825     MOVF 0x25, W                       735:           movf key_temp, W
+0315  3A01     XORLW 0x1                          736:           xorlw D'1'
+0316  1D03     BTFSS STATUS, 0x2                  737:           btfss STATUS, Z
+0317  2B34     GOTO 0x334                         738:               goto check_3
+0318  20F6     CALL 0xF6                          739:           call Clear_Display
+0319  3002     MOVLW 0x2                          740:           movlw H'02'
+031A  00A4     MOVWF 0x24                         741:           movwf lcd_tmp
+031B  0E24     SWAPF 0x24, W                      742:           BCD_Display lcd_tmp
+031C  390F     ANDLW 0xF
+031D  3E30     ADDLW 0x30
+031E  24F0     CALL 0x4F0
+031F  257B     CALL 0x57B
+0320  0824     MOVF 0x24, W
+0321  390F     ANDLW 0xF
+0322  3E30     ADDLW 0x30
+0323  24F0     CALL 0x4F0
+0324  20F3     CALL 0xF3                          743:           call Switch_Lines
+0325  01A3     CLRF 0x23                          744:           Display Trial
+0326  0103     CLRW
+0327  0823     MOVF 0x23, W
+0328  20E4     CALL 0xE4
+0329  3A00     XORLW 0x0
+032A  1903     BTFSC STATUS, 0x2
+032B  2B2F     GOTO 0x32F
+032C  24F0     CALL 0x4F0
+032D  0AA3     INCF 0x23, F
+032E  2B27     GOTO 0x327
+032F  3014     MOVLW 0x14                         745:           movlw    0x14
+0330  00BC     MOVWF 0x3C                         746:           movwf    ADDRL
+0331  22F4     CALL 0x2F4                         747:           call display_EE
+0332  24B1     CALL 0x4B1                         748:           call HalfS
+0333  2ACC     GOTO 0x2CC                         749:           goto pmenu_access
+                                                  750:   
+                                                  751:   check_3
+0334  0825     MOVF 0x25, W                       752:           movf key_temp, W
+0335  3A02     XORLW 0x2                          753:           xorlw D'2'
+0336  1D03     BTFSS STATUS, 0x2                  754:           btfss STATUS, Z
+0337  2B54     GOTO 0x354                         755:               goto check_4
+0338  20F6     CALL 0xF6                          756:           call Clear_Display
+0339  3003     MOVLW 0x3                          757:           movlw D'3'
+033A  00A4     MOVWF 0x24                         758:           movwf lcd_tmp
+033B  0E24     SWAPF 0x24, W                      759:           BCD_Display lcd_tmp
+033C  390F     ANDLW 0xF
+033D  3E30     ADDLW 0x30
+033E  24F0     CALL 0x4F0
+033F  257B     CALL 0x57B
+0340  0824     MOVF 0x24, W
+0341  390F     ANDLW 0xF
+0342  3E30     ADDLW 0x30
+0343  24F0     CALL 0x4F0
+0344  20F3     CALL 0xF3                          760:           call Switch_Lines
+0345  01A3     CLRF 0x23                          761:           Display Trial
+0346  0103     CLRW
+0347  0823     MOVF 0x23, W
+0348  20E4     CALL 0xE4
+0349  3A00     XORLW 0x0
+034A  1903     BTFSC STATUS, 0x2
+034B  2B4F     GOTO 0x34F
+034C  24F0     CALL 0x4F0
+034D  0AA3     INCF 0x23, F
+034E  2B47     GOTO 0x347
+034F  3018     MOVLW 0x18                         762:           movlw    0x18
+0350  00BC     MOVWF 0x3C                         763:           movwf    ADDRL
+0351  22F4     CALL 0x2F4                         764:           call display_EE
+0352  24B1     CALL 0x4B1                         765:           call HalfS
+0353  2ACC     GOTO 0x2CC                         766:           goto pmenu_access
+                                                  767:   
+                                                  768:   check_4
+0354  0825     MOVF 0x25, W                       769:           movf key_temp, W
+0355  3A04     XORLW 0x4                          770:           xorlw D'4'
+0356  1D03     BTFSS STATUS, 0x2                  771:           btfss STATUS, Z
+0357  2B74     GOTO 0x374                         772:               goto check_5
+0358  20F6     CALL 0xF6                          773:           call Clear_Display
+0359  3004     MOVLW 0x4                          774:           movlw H'04'
+035A  00A4     MOVWF 0x24                         775:           movwf lcd_tmp
+035B  0E24     SWAPF 0x24, W                      776:           BCD_Display lcd_tmp
+035C  390F     ANDLW 0xF
+035D  3E30     ADDLW 0x30
+035E  24F0     CALL 0x4F0
+035F  257B     CALL 0x57B
+0360  0824     MOVF 0x24, W
+0361  390F     ANDLW 0xF
+0362  3E30     ADDLW 0x30
+0363  24F0     CALL 0x4F0
+0364  20F3     CALL 0xF3                          777:           call Switch_Lines
+0365  01A3     CLRF 0x23                          778:           Display Trial
+0366  0103     CLRW
+0367  0823     MOVF 0x23, W
+0368  20E4     CALL 0xE4
+0369  3A00     XORLW 0x0
+036A  1903     BTFSC STATUS, 0x2
+036B  2B6F     GOTO 0x36F
+036C  24F0     CALL 0x4F0
+036D  0AA3     INCF 0x23, F
+036E  2B67     GOTO 0x367
+036F  301C     MOVLW 0x1C                         779:           movlw    0x1c
+0370  00BC     MOVWF 0x3C                         780:           movwf    ADDRL
+0371  22F4     CALL 0x2F4                         781:           call display_EE
+0372  24B1     CALL 0x4B1                         782:           call HalfS
+0373  2ACC     GOTO 0x2CC                         783:           goto pmenu_access
+                                                  784:   
+                                                  785:   check_5
+0374  0825     MOVF 0x25, W                       786:           movf key_temp, W
+0375  3A05     XORLW 0x5                          787:           xorlw D'5'
+0376  1D03     BTFSS STATUS, 0x2                  788:           btfss STATUS, Z
+0377  2B94     GOTO 0x394                         789:               goto check_6
+0378  20F6     CALL 0xF6                          790:           call Clear_Display
+0379  3005     MOVLW 0x5                          791:           movlw H'05'
+037A  00A4     MOVWF 0x24                         792:           movwf lcd_tmp
+037B  0E24     SWAPF 0x24, W                      793:           BCD_Display lcd_tmp
+037C  390F     ANDLW 0xF
+037D  3E30     ADDLW 0x30
+037E  24F0     CALL 0x4F0
+037F  257B     CALL 0x57B
+0380  0824     MOVF 0x24, W
+0381  390F     ANDLW 0xF
+0382  3E30     ADDLW 0x30
+0383  24F0     CALL 0x4F0
+0384  20F3     CALL 0xF3                          794:           call Switch_Lines
+0385  01A3     CLRF 0x23                          795:           Display Trial
+0386  0103     CLRW
+0387  0823     MOVF 0x23, W
+0388  20E4     CALL 0xE4
+0389  3A00     XORLW 0x0
+038A  1903     BTFSC STATUS, 0x2
+038B  2B8F     GOTO 0x38F
+038C  24F0     CALL 0x4F0
+038D  0AA3     INCF 0x23, F
+038E  2B87     GOTO 0x387
+038F  3020     MOVLW 0x20                         796:           movlw    0x20
+0390  00BC     MOVWF 0x3C                         797:           movwf    ADDRL
+0391  22F4     CALL 0x2F4                         798:           call display_EE
+0392  24B1     CALL 0x4B1                         799:           call HalfS
+0393  2ACC     GOTO 0x2CC                         800:           goto pmenu_access
+                                                  801:   
+                                                  802:   check_6
+0394  0825     MOVF 0x25, W                       803:           movf key_temp, W
+0395  3A06     XORLW 0x6                          804:           xorlw D'6'
+0396  1D03     BTFSS STATUS, 0x2                  805:           btfss STATUS, Z
+0397  2BB4     GOTO 0x3B4                         806:               goto check_7
+0398  20F6     CALL 0xF6                          807:           call Clear_Display
+0399  3006     MOVLW 0x6                          808:           movlw H'06'
+039A  00A4     MOVWF 0x24                         809:           movwf lcd_tmp
+039B  0E24     SWAPF 0x24, W                      810:           BCD_Display lcd_tmp
+039C  390F     ANDLW 0xF
+039D  3E30     ADDLW 0x30
+039E  24F0     CALL 0x4F0
+039F  257B     CALL 0x57B
+03A0  0824     MOVF 0x24, W
+03A1  390F     ANDLW 0xF
+03A2  3E30     ADDLW 0x30
+03A3  24F0     CALL 0x4F0
+03A4  20F3     CALL 0xF3                          811:           call Switch_Lines
+03A5  01A3     CLRF 0x23                          812:           Display Trial
+03A6  0103     CLRW
+03A7  0823     MOVF 0x23, W
+03A8  20E4     CALL 0xE4
+03A9  3A00     XORLW 0x0
+03AA  1903     BTFSC STATUS, 0x2
+03AB  2BAF     GOTO 0x3AF
+03AC  24F0     CALL 0x4F0
+03AD  0AA3     INCF 0x23, F
+03AE  2BA7     GOTO 0x3A7
+03AF  3024     MOVLW 0x24                         813:           movlw    0x24
+03B0  00BC     MOVWF 0x3C                         814:           movwf    ADDRL
+03B1  22F4     CALL 0x2F4                         815:           call display_EE
+03B2  24B1     CALL 0x4B1                         816:           call HalfS
+03B3  2ACC     GOTO 0x2CC                         817:           goto pmenu_access
+                                                  818:   
+                                                  819:   check_7
+03B4  0825     MOVF 0x25, W                       820:           movf key_temp, W
+03B5  3A08     XORLW 0x8                          821:           xorlw D'8'
+03B6  1D03     BTFSS STATUS, 0x2                  822:           btfss STATUS, Z
+03B7  2BD4     GOTO 0x3D4                         823:               goto check_8
+03B8  20F6     CALL 0xF6                          824:           call Clear_Display
+03B9  3007     MOVLW 0x7                          825:           movlw H'07'
+03BA  00A4     MOVWF 0x24                         826:           movwf lcd_tmp
+03BB  0E24     SWAPF 0x24, W                      827:           BCD_Display lcd_tmp
+03BC  390F     ANDLW 0xF
+03BD  3E30     ADDLW 0x30
+03BE  24F0     CALL 0x4F0
+03BF  257B     CALL 0x57B
+03C0  0824     MOVF 0x24, W
+03C1  390F     ANDLW 0xF
+03C2  3E30     ADDLW 0x30
+03C3  24F0     CALL 0x4F0
+03C4  20F3     CALL 0xF3                          828:           call Switch_Lines
+03C5  01A3     CLRF 0x23                          829:           Display Trial
+03C6  0103     CLRW
+03C7  0823     MOVF 0x23, W
+03C8  20E4     CALL 0xE4
+03C9  3A00     XORLW 0x0
+03CA  1903     BTFSC STATUS, 0x2
+03CB  2BCF     GOTO 0x3CF
+03CC  24F0     CALL 0x4F0
+03CD  0AA3     INCF 0x23, F
+03CE  2BC7     GOTO 0x3C7
+03CF  3028     MOVLW 0x28                         830:           movlw    0x28
+03D0  00BC     MOVWF 0x3C                         831:           movwf    ADDRL
+03D1  22F4     CALL 0x2F4                         832:           call display_EE
+03D2  24B1     CALL 0x4B1                         833:           call HalfS
+03D3  2ACC     GOTO 0x2CC                         834:           goto pmenu_access
+                                                  835:   
+                                                  836:   check_8
+03D4  0825     MOVF 0x25, W                       837:           movf key_temp, W
+03D5  3A09     XORLW 0x9                          838:           xorlw D'9'
+03D6  1D03     BTFSS STATUS, 0x2                  839:           btfss STATUS, Z
+03D7  2BF4     GOTO 0x3F4                         840:               goto check_9
+03D8  20F6     CALL 0xF6                          841:           call Clear_Display
+03D9  3008     MOVLW 0x8                          842:           movlw H'08'
+03DA  00A4     MOVWF 0x24                         843:           movwf lcd_tmp
+03DB  0E24     SWAPF 0x24, W                      844:           BCD_Display lcd_tmp
+03DC  390F     ANDLW 0xF
+03DD  3E30     ADDLW 0x30
+03DE  24F0     CALL 0x4F0
+03DF  257B     CALL 0x57B
+03E0  0824     MOVF 0x24, W
+03E1  390F     ANDLW 0xF
+03E2  3E30     ADDLW 0x30
+03E3  24F0     CALL 0x4F0
+03E4  20F3     CALL 0xF3                          845:           call Switch_Lines
+03E5  01A3     CLRF 0x23                          846:           Display Trial
+03E6  0103     CLRW
+03E7  0823     MOVF 0x23, W
+03E8  20E4     CALL 0xE4
+03E9  3A00     XORLW 0x0
+03EA  1903     BTFSC STATUS, 0x2
+03EB  2BEF     GOTO 0x3EF
+03EC  24F0     CALL 0x4F0
+03ED  0AA3     INCF 0x23, F
+03EE  2BE7     GOTO 0x3E7
+03EF  302C     MOVLW 0x2C                         847:           movlw    0x2c
+03F0  00BC     MOVWF 0x3C                         848:           movwf    ADDRL
+03F1  22F4     CALL 0x2F4                         849:           call display_EE
+03F2  24B1     CALL 0x4B1                         850:           call HalfS
+03F3  2ACC     GOTO 0x2CC                         851:           goto pmenu_access
+                                                  852:   
+                                                  853:   check_9
+03F4  0825     MOVF 0x25, W                       854:           movf key_temp, W
+03F5  3A0A     XORLW 0xA                          855:           xorlw D'10'
+03F6  1D03     BTFSS STATUS, 0x2                  856:           btfss STATUS, Z
+03F7  2C14     GOTO 0x414                         857:               goto continue
+03F8  20F6     CALL 0xF6                          858:           call Clear_Display
+03F9  3009     MOVLW 0x9                          859:           movlw H'09'
+03FA  00A4     MOVWF 0x24                         860:           movwf lcd_tmp
+03FB  0E24     SWAPF 0x24, W                      861:           BCD_Display lcd_tmp
+03FC  390F     ANDLW 0xF
+03FD  3E30     ADDLW 0x30
+03FE  24F0     CALL 0x4F0
+03FF  257B     CALL 0x57B
+0400  0824     MOVF 0x24, W
+0401  390F     ANDLW 0xF
+0402  3E30     ADDLW 0x30
+0403  24F0     CALL 0x4F0
+0404  20F3     CALL 0xF3                          862:           call Switch_Lines
+0405  01A3     CLRF 0x23                          863:           Display Trial
+0406  0103     CLRW
+0407  0823     MOVF 0x23, W
+0408  20E4     CALL 0xE4
+0409  3A00     XORLW 0x0
+040A  1903     BTFSC STATUS, 0x2
+040B  2C0F     GOTO 0x40F
+040C  24F0     CALL 0x4F0
+040D  0AA3     INCF 0x23, F
+040E  2C07     GOTO 0x407
+040F  3030     MOVLW 0x30                         864:           movlw    0x30
+0410  00BC     MOVWF 0x3C                         865:           movwf    ADDRL
+0411  22F4     CALL 0x2F4                         866:           call display_EE
+0412  24B1     CALL 0x4B1                         867:           call HalfS
+0413  2ACC     GOTO 0x2CC                         868:           goto pmenu_access
+                                                  869:   
+                                                  870:   continue
+0414  20F6     CALL 0xF6                          871:           call Clear_Display
+0415  0008     RETURN                             872:           return
+                                                  873:   
+                                                  874:   wait
+0416  24B1     CALL 0x4B1                         875:            call		HalfS    ;Wait until data is available from the keypad
+0417  1C86     BTFSS PORTB, 0x1                   876:            btfss		PORTB,1
+0418  2C16     GOTO 0x416                         877:            goto		wait
+0419  0008     RETURN                             878:            return
+                                                  879:   
+                                                  880:   show_RTC
+                                                  881:   		;clear LCD screen
+041A  3001     MOVLW 0x1                          882:   		movlw	b'00000001'
+041B  24E1     CALL 0x4E1                         883:   		call	WR_INS
+                                                  884:   
+                                                  885:   		;Get year
+041C  3032     MOVLW 0x32                         886:   		movlw	"2"				;First line shows 20**/**/**
+041D  24F0     CALL 0x4F0                         887:   		call	WR_DATA
+041E  3030     MOVLW 0x30                         888:   		movlw	"0"
+041F  24F0     CALL 0x4F0                         889:   		call	WR_DATA
+                                                  890:   
+0420  3006     MOVLW 0x6                          891:   		rtc_read	0x06		;Read Address 0x06 from DS1307---year
+0421  1283     BCF STATUS, 0x5
+0422  1303     BCF STATUS, 0x6
+0423  00F3     MOVWF com
+0424  26FC     CALL 0x6FC
+0425  1283     BCF STATUS, 0x5
+0426  1303     BCF STATUS, 0x6
+0427  0875     MOVF 0x75, W
+0428  274B     CALL 0x74B
+0429  0877     MOVF 0x77, W                       892:   		movfw	0x77
+042A  24F0     CALL 0x4F0                         893:   		call	WR_DATA
+042B  0878     MOVF 0x78, W                       894:   		movfw	0x78
+042C  24F0     CALL 0x4F0                         895:   		call	WR_DATA
+                                                  896:   
+042D  302F     MOVLW 0x2F                         897:   		movlw	"/"
+042E  24F0     CALL 0x4F0                         898:   		call	WR_DATA
+                                                  899:   
+                                                  900:   		;Get month
+042F  3005     MOVLW 0x5                          901:   		rtc_read	0x05		;Read Address 0x05 from DS1307---month
+0430  1283     BCF STATUS, 0x5
+0431  1303     BCF STATUS, 0x6
+0432  00F3     MOVWF com
+0433  26FC     CALL 0x6FC
+0434  1283     BCF STATUS, 0x5
+0435  1303     BCF STATUS, 0x6
+0436  0875     MOVF 0x75, W
+0437  274B     CALL 0x74B
+0438  0877     MOVF 0x77, W                       902:   		movfw	0x77
+0439  24F0     CALL 0x4F0                         903:   		call	WR_DATA
+043A  0878     MOVF 0x78, W                       904:   		movfw	0x78
+043B  24F0     CALL 0x4F0                         905:   		call	WR_DATA
+                                                  906:   
+043C  302F     MOVLW 0x2F                         907:   		movlw	"/"
+043D  24F0     CALL 0x4F0                         908:   		call	WR_DATA
+                                                  909:   
+                                                  910:   		;Get day
+043E  3004     MOVLW 0x4                          911:   		rtc_read	0x04		;Read Address 0x04 from DS1307---day
+043F  1283     BCF STATUS, 0x5
+0440  1303     BCF STATUS, 0x6
+0441  00F3     MOVWF com
+0442  26FC     CALL 0x6FC
+0443  1283     BCF STATUS, 0x5
+0444  1303     BCF STATUS, 0x6
+0445  0875     MOVF 0x75, W
+0446  274B     CALL 0x74B
+0447  0877     MOVF 0x77, W                       912:   		movfw	0x77
+0448  24F0     CALL 0x4F0                         913:   		call	WR_DATA
+0449  0878     MOVF 0x78, W                       914:   		movfw	0x78
+044A  24F0     CALL 0x4F0                         915:   		call	WR_DATA
+                                                  916:   
+044B  30C0     MOVLW 0xC0                         917:   		movlw	B'11000000'		;Next line displays (hour):(min):(sec) **:**:**
+044C  24E1     CALL 0x4E1                         918:   		call	WR_INS
+                                                  919:   
+                                                  920:   Refresh
+044D  30C0     MOVLW 0xC0                         921:           movlw B'11000000' ;move cursor to position H?4B?
+044E  24E1     CALL 0x4E1                         922:           call WR_INS
+                                                  923:   
+                                                  924:   		;Get hour
+044F  3002     MOVLW 0x2                          925:   		rtc_read	0x02		;Read Address 0x02 from DS1307---hour
+0450  1283     BCF STATUS, 0x5
+0451  1303     BCF STATUS, 0x6
+0452  00F3     MOVWF com
+0453  26FC     CALL 0x6FC
+0454  1283     BCF STATUS, 0x5
+0455  1303     BCF STATUS, 0x6
+0456  0875     MOVF 0x75, W
+0457  274B     CALL 0x74B
+0458  0877     MOVF 0x77, W                       926:   		movfw	0x77
+0459  24F0     CALL 0x4F0                         927:   		call	WR_DATA
+045A  0878     MOVF 0x78, W                       928:   		movfw	0x78
+045B  24F0     CALL 0x4F0                         929:   		call	WR_DATA
+045C  303A     MOVLW 0x3A                         930:   		movlw	":"
+045D  24F0     CALL 0x4F0                         931:   		call	WR_DATA
+                                                  932:   		;Get minute
+045E  3001     MOVLW 0x1                          933:   		rtc_read	0x01		;Read Address 0x01 from DS1307---min
+045F  1283     BCF STATUS, 0x5
+0460  1303     BCF STATUS, 0x6
+0461  00F3     MOVWF com
+0462  26FC     CALL 0x6FC
+0463  1283     BCF STATUS, 0x5
+0464  1303     BCF STATUS, 0x6
+0465  0875     MOVF 0x75, W
+0466  274B     CALL 0x74B
+0467  0877     MOVF 0x77, W                       934:   		movfw	0x77
+0468  24F0     CALL 0x4F0                         935:   		call	WR_DATA
+0469  0878     MOVF 0x78, W                       936:   		movfw	0x78
+046A  24F0     CALL 0x4F0                         937:   		call	WR_DATA
+046B  303A     MOVLW 0x3A                         938:   		movlw			":"
+046C  24F0     CALL 0x4F0                         939:   		call	WR_DATA
+                                                  940:   
+                                                  941:   		;Get seconds
+046D  3000     MOVLW 0x0                          942:   		rtc_read	0x00		;Read Address 0x00 from DS1307---seconds
+046E  1283     BCF STATUS, 0x5
+046F  1303     BCF STATUS, 0x6
+0470  00F3     MOVWF com
+0471  26FC     CALL 0x6FC
+0472  1283     BCF STATUS, 0x5
+0473  1303     BCF STATUS, 0x6
+0474  0875     MOVF 0x75, W
+0475  274B     CALL 0x74B
+0476  0877     MOVF 0x77, W                       943:   		movfw	0x77
+0477  24F0     CALL 0x4F0                         944:   		call	WR_DATA
+0478  0878     MOVF 0x78, W                       945:   		movfw	0x78
+0479  24F0     CALL 0x4F0                         946:   		call	WR_DATA
+                                                  947:   
+047A  24B1     CALL 0x4B1                         948:   		call	HalfS			;Delay for exactly one seconds and read DS1307 again
+047B  24B1     CALL 0x4B1                         949:           call	HalfS    ;Wait until data is available from the keypad
+047C  1C86     BTFSS PORTB, 0x1                   950:           btfss	PORTB,1
+047D  2C4D     GOTO 0x44D                         951:               goto	Refresh
+047E  0008     RETURN                             952:           return
+                                                  953:   
+                                                  954:   Motor_On
+047F  01A3     CLRF 0x23                          955:       Display SW_ON
+0480  0103     CLRW
+0481  0823     MOVF 0x23, W
+0482  2080     CALL 0x80
+0483  3A00     XORLW 0x0
+0484  1903     BTFSC STATUS, 0x2
+0485  2C89     GOTO 0x489
+0486  24F0     CALL 0x4F0
+0487  0AA3     INCF 0x23, F
+0488  2C81     GOTO 0x481
+                                                  956:       ;movlw 0x01 ;turn motor on
+                                                  957:       ;movwf PORTC
+                                                  958:       ;call QuarterS
+0489  3000     MOVLW 0x0                          959:       movlw 0x00 ;turn motor off
+048A  0087     MOVWF PORTC                        960:       movwf PORTC
+048B  24B1     CALL 0x4B1                         961:       call HalfS
+048C  3001     MOVLW 0x1                          962:       movlw 0x01 ;turn motor on
+048D  0087     MOVWF PORTC                        963:       movwf PORTC
+048E  24D1     CALL 0x4D1                         964:       call EightS
+048F  3000     MOVLW 0x0                          965:       movlw 0x00 ;turn motor off
+0490  0087     MOVWF PORTC                        966:       movwf PORTC
+0491  24B1     CALL 0x4B1                         967:       call HalfS
+0492  3001     MOVLW 0x1                          968:       movlw 0x01 ;turn motor on
+0493  0087     MOVWF PORTC                        969:       movwf PORTC
+0494  24D1     CALL 0x4D1                         970:       call EightS
+0495  3000     MOVLW 0x0                          971:       movlw 0x00 ;turn motor off
+0496  0087     MOVWF PORTC                        972:       movwf PORTC
+0497  24B1     CALL 0x4B1                         973:       call HalfS
+0498  20F6     CALL 0xF6                          974:       call Clear_Display
+0499  0008     RETURN                             975:       return
+                                                  976:   
+                                                  977:   Motor_Off
+049A  01A3     CLRF 0x23                          978:       Display SW_OFF
+049B  0103     CLRW
+049C  0823     MOVF 0x23, W
+049D  208B     CALL 0x8B
+049E  3A00     XORLW 0x0
+049F  1903     BTFSC STATUS, 0x2
+04A0  2CA4     GOTO 0x4A4
+04A1  24F0     CALL 0x4F0
+04A2  0AA3     INCF 0x23, F
+04A3  2C9C     GOTO 0x49C
+04A4  3002     MOVLW 0x2                          979:       movlw 0x02 ;turn motor on
+04A5  0087     MOVWF PORTC                        980:       movwf PORTC
+04A6  24C1     CALL 0x4C1                         981:       call QuarterS
+04A7  3000     MOVLW 0x0                          982:       movlw 0x00 ;turn motor off
+04A8  0087     MOVWF PORTC                        983:       movwf PORTC
+04A9  24B1     CALL 0x4B1                         984:       call HalfS
+04AA  3002     MOVLW 0x2                          985:       movlw 0x02 ;turn motor on
+04AB  0087     MOVWF PORTC                        986:       movwf PORTC
+04AC  24D1     CALL 0x4D1                         987:       call EightS
+                                                  988:   ;    movlw 0x00 ;turn motor off
+                                                  989:   ;    movwf PORTC
+                                                  990:   ;    call  HalfS
+                                                  991:   ;    movlw 0x02 ;turn motor on
+                                                  992:   ;    movwf PORTC
+                                                  993:   ;    call QuarterS
+04AD  3000     MOVLW 0x0                          994:       movlw 0x00 ;turn motor off
+04AE  0087     MOVWF PORTC                        995:       movwf PORTC
+04AF  20F6     CALL 0xF6                          996:       call Clear_Display
+04B0  0008     RETURN                             997:       return
+                                                  998:   
+                                                  999:   HalfS
+                                                  1000:  	local	HalfS_0
+04B1  3088     MOVLW 0x88                         1001:        movlw 0x88
+04B2  00A0     MOVWF 0x20                         1002:        movwf COUNTH
+04B3  30BD     MOVLW 0xBD                         1003:        movlw 0xBD
+04B4  00A1     MOVWF 0x21                         1004:        movwf COUNTM
+04B5  3003     MOVLW 0x3                          1005:        movlw 0x03
+04B6  00A2     MOVWF 0x22                         1006:        movwf COUNTL
+                                                  1007:  
+                                                  1008:  HalfS_0
+04B7  0BA0     DECFSZ 0x20, F                     1009:        decfsz COUNTH, f
+04B8  2CBA     GOTO 0x4BA                         1010:        goto   $+2
+04B9  0BA1     DECFSZ 0x21, F                     1011:        decfsz COUNTM, f
+04BA  2CBC     GOTO 0x4BC                         1012:        goto   $+2
+04BB  0BA2     DECFSZ 0x22, F                     1013:        decfsz COUNTL, f
+04BC  2CB7     GOTO 0x4B7                         1014:        goto   HalfS_0
+                                                  1015:  
+04BD  2CBE     GOTO 0x4BE                         1016:        goto $+1
+04BE  0000     NOP                                1017:        nop
+04BF  0000     NOP                                1018:        nop
+04C0  0008     RETURN                             1019:  		return
+                                                  1020:  
+                                                  1021:  QuarterS
+                                                  1022:  	local	QuarterS_0
+04C1  3044     MOVLW 0x44                         1023:        movlw 0x44
+04C2  00A0     MOVWF 0x20                         1024:        movwf COUNTH
+04C3  304F     MOVLW 0x4F                         1025:        movlw 0x4F
+04C4  00A1     MOVWF 0x21                         1026:        movwf COUNTM
+04C5  3003     MOVLW 0x3                          1027:        movlw 0x03
+04C6  00A2     MOVWF 0x22                         1028:        movwf COUNTL
+                                                  1029:  
+                                                  1030:  QuarterS_0
+04C7  0BA0     DECFSZ 0x20, F                     1031:        decfsz COUNTH, f
+04C8  2CCA     GOTO 0x4CA                         1032:        goto   $+2
+04C9  0BA1     DECFSZ 0x21, F                     1033:        decfsz COUNTM, f
+04CA  2CCC     GOTO 0x4CC                         1034:        goto   $+2
+04CB  0BA2     DECFSZ 0x22, F                     1035:        decfsz COUNTL, f
+04CC  2CC7     GOTO 0x4C7                         1036:        goto   QuarterS_0
+                                                  1037:  
+04CD  2CCE     GOTO 0x4CE                         1038:        goto $+1
+04CE  0000     NOP                                1039:        nop
+04CF  0000     NOP                                1040:        nop
+04D0  0008     RETURN                             1041:  		return
+                                                  1042:  
+                                                  1043:  EightS
+                                                  1044:  	local	EightS_0
+04D1  3020     MOVLW 0x20                         1045:        movlw 0x20
+04D2  00A0     MOVWF 0x20                         1046:        movwf COUNTH
+04D3  3020     MOVLW 0x20                         1047:        movlw 0x20
+04D4  00A1     MOVWF 0x21                         1048:        movwf COUNTM
+04D5  3003     MOVLW 0x3                          1049:        movlw 0x03
+04D6  00A2     MOVWF 0x22                         1050:        movwf COUNTL
+                                                  1051:  
+                                                  1052:  EightS_0
+04D7  0BA0     DECFSZ 0x20, F                     1053:        decfsz COUNTH, f
+04D8  2CDA     GOTO 0x4DA                         1054:        goto   $+2
+04D9  0BA1     DECFSZ 0x21, F                     1055:        decfsz COUNTM, f
+04DA  2CDC     GOTO 0x4DC                         1056:        goto   $+2
+04DB  0BA2     DECFSZ 0x22, F                     1057:        decfsz COUNTL, f
+04DC  2CD7     GOTO 0x4D7                         1058:        goto   EightS_0
+                                                  1059:  
+04DD  2CDE     GOTO 0x4DE                         1060:        goto $+1
+04DE  0000     NOP                                1061:        nop
+04DF  0000     NOP                                1062:        nop
+04E0  0008     RETURN                             1063:  		return
+                                                  1064:  
+                                                  1065:  WR_INS
+04E1  1108     BCF PORTD, 0x2                     1066:  	bcf		RS				;clear RS
+04E2  00A9     MOVWF 0x29                         1067:  	movwf	com				;W --> com
+04E3  39F0     ANDLW 0xF0                         1068:  	andlw	0xF0			;mask 4 bits MSB w = X0
+04E4  0088     MOVWF PORTD                        1069:  	movwf	PORTD			;Send 4 bits MSB
+04E5  1588     BSF PORTD, 0x3                     1070:  	bsf		E				;
+04E6  257B     CALL 0x57B                         1071:  	call	lcdLongDelay	;__    __
+04E7  1188     BCF PORTD, 0x3                     1072:  	bcf		E				;  |__|
+04E8  0E29     SWAPF 0x29, W                      1073:  	swapf	com,w
+04E9  39F0     ANDLW 0xF0                         1074:  	andlw	0xF0			;1111 0010
+04EA  0088     MOVWF PORTD                        1075:  	movwf	PORTD			;send 4 bits LSB
+04EB  1588     BSF PORTD, 0x3                     1076:  	bsf		E				;
+04EC  257B     CALL 0x57B                         1077:  	call	lcdLongDelay	;__    __
+04ED  1188     BCF PORTD, 0x3                     1078:  	bcf		E				;  |__|
+04EE  257B     CALL 0x57B                         1079:  	call	lcdLongDelay
+04EF  0008     RETURN                             1080:  	return
+                                                  1081:  
+                                                  1082:  WR_DATA
+04F0  1508     BSF PORTD, 0x2                     1083:  	bsf		RS
+04F1  00AA     MOVWF 0x2A                         1084:  	movwf	dat
+04F2  082A     MOVF 0x2A, W                       1085:  	movf	dat,w
+04F3  39F0     ANDLW 0xF0                         1086:  	andlw	0xF0
+04F4  3E04     ADDLW 0x4                          1087:  	addlw	4
+04F5  0088     MOVWF PORTD                        1088:  	movwf	PORTD
+04F6  1588     BSF PORTD, 0x3                     1089:  	bsf		E				;
+04F7  257B     CALL 0x57B                         1090:  	call	lcdLongDelay	;__    __
+04F8  1188     BCF PORTD, 0x3                     1091:  	bcf		E				;  |__|
+04F9  0E2A     SWAPF 0x2A, W                      1092:  	swapf	dat,w
+04FA  39F0     ANDLW 0xF0                         1093:  	andlw	0xF0
+04FB  3E04     ADDLW 0x4                          1094:  	addlw	4
+04FC  0088     MOVWF PORTD                        1095:  	movwf	PORTD
+04FD  1588     BSF PORTD, 0x3                     1096:  	bsf		E				;
+04FE  257B     CALL 0x57B                         1097:  	call	lcdLongDelay	;__    __
+04FF  1188     BCF PORTD, 0x3                     1098:  	bcf		E				;  |__|
+0500  0008     RETURN                             1099:  	return
+                                                  1100:  
+                                                  1101:  Convert
+0501  01BB     CLRF 0x3B                          1102:      clrf run_temp
+                                                  1103:  ;save and restore
+0502  0835     MOVF 0x35, W                       1104:      movf runtime, w
+0503  00BB     MOVWF 0x3B                         1105:      movwf run_temp
+0504  3008     MOVLW 0x8                          1106:      movlw 8
+0505  00BA     MOVWF 0x3A                         1107:      movwf count_temp
+0506  01B9     CLRF 0x39                          1108:      clrf huns
+0507  01B8     CLRF 0x38                          1109:      clrf tens
+0508  01B7     CLRF 0x37                          1110:      clrf ones
+                                                  1111:  
+                                                  1112:  BCDADD3
+                                                  1113:  
+0509  3005     MOVLW 0x5                          1114:      movlw 5
+050A  0239     SUBWF 0x39, W                      1115:      subwf huns, 0
+050B  1803     BTFSC STATUS, 0x0                  1116:      btfsc STATUS, C
+050C  252F     CALL 0x52F                         1117:      CALL ADD3HUNS
+                                                  1118:  
+050D  3005     MOVLW 0x5                          1119:      movlw 5
+050E  0238     SUBWF 0x38, W                      1120:      subwf tens, 0
+050F  1803     BTFSC STATUS, 0x0                  1121:      btfsc STATUS, C
+0510  2532     CALL 0x532                         1122:      CALL ADD3TENS
+                                                  1123:  
+0511  3005     MOVLW 0x5                          1124:      movlw 5
+0512  0237     SUBWF 0x37, W                      1125:      subwf ones, 0
+0513  1803     BTFSC STATUS, 0x0                  1126:      btfsc STATUS, C
+0514  2535     CALL 0x535                         1127:      CALL ADD3ONES
+                                                  1128:  
+0515  03BA     DECF 0x3A, F                       1129:      decf count_temp, 1
+0516  1003     BCF STATUS, 0x0                    1130:      bcf STATUS, C
+0517  0DB5     RLF 0x35, F                        1131:      rlf runtime, 1
+0518  0DB7     RLF 0x37, F                        1132:      rlf ones, 1
+0519  1A37     BTFSC 0x37, 0x4                    1133:      btfsc ones,4 ;
+051A  2538     CALL 0x538                         1134:      CALL CARRYONES
+051B  0DB8     RLF 0x38, F                        1135:      rlf tens, 1
+                                                  1136:  
+051C  1A38     BTFSC 0x38, 0x4                    1137:      btfsc tens,4 ;
+051D  253B     CALL 0x53B                         1138:      CALL CARRYTENS
+051E  0DB9     RLF 0x39, F                        1139:      rlf huns,1
+051F  1003     BCF STATUS, 0x0                    1140:      bcf STATUS, C
+                                                  1141:  
+0520  083A     MOVF 0x3A, W                       1142:      movf count_temp, 0
+0521  1D03     BTFSS STATUS, 0x2                  1143:      btfss STATUS, Z
+0522  2D09     GOTO 0x509                         1144:      GOTO BCDADD3
+                                                  1145:  
+                                                  1146:  
+0523  0839     MOVF 0x39, W                       1147:      movf huns, 0 ; add ASCII Offset
+0524  3E30     ADDLW 0x30                         1148:      addlw h'30'
+0525  24F0     CALL 0x4F0                         1149:      call WR_DATA
+                                                  1150:  
+0526  0838     MOVF 0x38, W                       1151:      movf tens, 0 ; add ASCII Offset
+0527  3E30     ADDLW 0x30                         1152:      addlw h'30'
+0528  24F0     CALL 0x4F0                         1153:      call WR_DATA
+                                                  1154:  
+0529  0837     MOVF 0x37, W                       1155:      movf ones, 0 ; add ASCII Offset
+052A  3E30     ADDLW 0x30                         1156:      addlw h'30'
+052B  24F0     CALL 0x4F0                         1157:      call WR_DATA
+                                                  1158:  
+052C  083B     MOVF 0x3B, W                       1159:      movf run_temp, w
+052D  00B5     MOVWF 0x35                         1160:      movwf runtime
+052E  0008     RETURN                             1161:      RETURN
+                                                  1162:  
+                                                  1163:  ADD3HUNS
+052F  3003     MOVLW 0x3                          1164:      movlw 3
+0530  07B9     ADDWF 0x39, F                      1165:      addwf huns,1
+0531  0008     RETURN                             1166:      RETURN
+                                                  1167:  
+                                                  1168:  ADD3TENS
+0532  3003     MOVLW 0x3                          1169:      movlw 3
+0533  07B8     ADDWF 0x38, F                      1170:      addwf tens,1
+0534  0008     RETURN                             1171:      RETURN
+                                                  1172:  
+                                                  1173:  ADD3ONES
+0535  3003     MOVLW 0x3                          1174:      movlw 3
+0536  07B7     ADDWF 0x37, F                      1175:      addwf ones,1
+0537  0008     RETURN                             1176:      RETURN
+                                                  1177:  
+                                                  1178:  CARRYONES
+0538  1237     BCF 0x37, 0x4                      1179:      bcf ones, 4
+0539  1403     BSF STATUS, 0x0                    1180:      bsf STATUS, C
+053A  0008     RETURN                             1181:      RETURN
+                                                  1182:  
+                                                  1183:  CARRYTENS
+053B  1238     BCF 0x38, 0x4                      1184:      bcf tens, 4
+053C  1403     BSF STATUS, 0x0                    1185:      bsf STATUS, C
+053D  0008     RETURN                             1186:      RETURN
+                                                  1187:  
+                                                  1188:  Convert1
+053E  01BB     CLRF 0x3B                          1189:      clrf run_temp
+                                                  1190:  ;save and restore
+053F  083F     MOVF 0x3F, W                       1191:      movf signal, w
+0540  00BB     MOVWF 0x3B                         1192:      movwf run_temp
+0541  3008     MOVLW 0x8                          1193:      movlw 8
+0542  00BA     MOVWF 0x3A                         1194:      movwf count_temp
+0543  01B9     CLRF 0x39                          1195:      clrf huns
+0544  01B8     CLRF 0x38                          1196:      clrf tens
+0545  01B7     CLRF 0x37                          1197:      clrf ones
+                                                  1198:  
+                                                  1199:  BCDADD31
+                                                  1200:  
+0546  3005     MOVLW 0x5                          1201:      movlw 5
+0547  0239     SUBWF 0x39, W                      1202:      subwf huns, 0
+0548  1803     BTFSC STATUS, 0x0                  1203:      btfsc STATUS, C
+0549  256C     CALL 0x56C                         1204:      CALL ADD3HUNS1
+                                                  1205:  
+054A  3005     MOVLW 0x5                          1206:      movlw 5
+054B  0238     SUBWF 0x38, W                      1207:      subwf tens, 0
+054C  1803     BTFSC STATUS, 0x0                  1208:      btfsc STATUS, C
+054D  256F     CALL 0x56F                         1209:      CALL ADD3TENS1
+                                                  1210:  
+054E  3005     MOVLW 0x5                          1211:      movlw 5
+054F  0237     SUBWF 0x37, W                      1212:      subwf ones, 0
+0550  1803     BTFSC STATUS, 0x0                  1213:      btfsc STATUS, C
+0551  2572     CALL 0x572                         1214:      CALL ADD3ONES1
+                                                  1215:  
+0552  03BA     DECF 0x3A, F                       1216:      decf count_temp, 1
+0553  1003     BCF STATUS, 0x0                    1217:      bcf STATUS, C
+0554  0DBF     RLF 0x3F, F                        1218:      rlf signal, 1
+0555  0DB7     RLF 0x37, F                        1219:      rlf ones, 1
+0556  1A37     BTFSC 0x37, 0x4                    1220:      btfsc ones,4 ;
+0557  2575     CALL 0x575                         1221:      CALL CARRYONES1
+0558  0DB8     RLF 0x38, F                        1222:      rlf tens, 1
+                                                  1223:  
+0559  1A38     BTFSC 0x38, 0x4                    1224:      btfsc tens,4 ;
+055A  2578     CALL 0x578                         1225:      CALL CARRYTENS1
+055B  0DB9     RLF 0x39, F                        1226:      rlf huns,1
+055C  1003     BCF STATUS, 0x0                    1227:      bcf STATUS, C
+                                                  1228:  
+055D  083A     MOVF 0x3A, W                       1229:      movf count_temp, 0
+055E  1D03     BTFSS STATUS, 0x2                  1230:      btfss STATUS, Z
+055F  2D46     GOTO 0x546                         1231:      GOTO BCDADD31
+                                                  1232:  
+                                                  1233:  
+0560  0839     MOVF 0x39, W                       1234:      movf huns, 0 ; add ASCII Offset
+0561  3E30     ADDLW 0x30                         1235:      addlw h'30'
+0562  24F0     CALL 0x4F0                         1236:      call WR_DATA
+                                                  1237:  
+0563  0838     MOVF 0x38, W                       1238:      movf tens, 0 ; add ASCII Offset
+0564  3E30     ADDLW 0x30                         1239:      addlw h'30'
+0565  24F0     CALL 0x4F0                         1240:      call WR_DATA
+                                                  1241:  
+0566  0837     MOVF 0x37, W                       1242:      movf ones, 0 ; add ASCII Offset
+0567  3E30     ADDLW 0x30                         1243:      addlw h'30'
+0568  24F0     CALL 0x4F0                         1244:      call WR_DATA
+                                                  1245:  
+0569  083B     MOVF 0x3B, W                       1246:      movf run_temp, w
+056A  00BF     MOVWF 0x3F                         1247:      movwf signal
+056B  0008     RETURN                             1248:      RETURN
+                                                  1249:  
+                                                  1250:  ADD3HUNS1
+056C  3003     MOVLW 0x3                          1251:      movlw 3
+056D  07B9     ADDWF 0x39, F                      1252:      addwf huns,1
+056E  0008     RETURN                             1253:      RETURN
+                                                  1254:  
+                                                  1255:  ADD3TENS1
+056F  3003     MOVLW 0x3                          1256:      movlw 3
+0570  07B8     ADDWF 0x38, F                      1257:      addwf tens,1
+0571  0008     RETURN                             1258:      RETURN
+                                                  1259:  
+                                                  1260:  ADD3ONES1
+0572  3003     MOVLW 0x3                          1261:      movlw 3
+0573  07B7     ADDWF 0x37, F                      1262:      addwf ones,1
+0574  0008     RETURN                             1263:      RETURN
+                                                  1264:  
+                                                  1265:  CARRYONES1
+0575  1237     BCF 0x37, 0x4                      1266:      bcf ones, 4
+0576  1403     BSF STATUS, 0x0                    1267:      bsf STATUS, C
+0577  0008     RETURN                             1268:      RETURN
+                                                  1269:  
+                                                  1270:  CARRYTENS1
+0578  1238     BCF 0x38, 0x4                      1271:      bcf tens, 4
+0579  1403     BSF STATUS, 0x0                    1272:      bsf STATUS, C
+057A  0008     RETURN                             1273:      RETURN
+                                                  1274:  
+                                                  1275:  lcdLongDelay
+057B  3014     MOVLW 0x14                         1276:      movlw d'20'
+057C  00AC     MOVWF 0x2C                         1277:      movwf lcd_d2
+                                                  1278:  LLD_LOOP
+057D  30FF     MOVLW 0xFF                         1279:      LCD_DELAY
+057E  00AB     MOVWF 0x2B
+057F  0BAB     DECFSZ 0x2B, F
+0580  2D7F     GOTO 0x57F
+0581  0BAC     DECFSZ 0x2C, F                     1280:      decfsz lcd_d2,f
+0582  2D7D     GOTO 0x57D                         1281:      goto LLD_LOOP
+0583  0008     RETURN                             1282:      return
+                                                  1283:  
+                                                  1284:  
+                                                  1285:  ISR
+                                                  1286:          ;saving registers
+0584  00B0     MOVWF 0x30                         1287:          movwf w_temp
+0585  0803     MOVF STATUS, W                     1288:          movf STATUS, w
+0586  00B1     MOVWF 0x31                         1289:          movwf status_temp
+                                                  1290:  
+                                                  1291:  Timer
+0587  110B     BCF INTCON, 0x2                    1292:          bcf     INTCON, 2
+0588  0BB6     DECFSZ 0x36, F                     1293:          decfsz  timercount, f
+0589  2D8E     GOTO 0x58E                         1294:              goto    addsignal
+058A  0AB5     INCF 0x35, F                       1295:          incf    runtime, f
+058B  3026     MOVLW 0x26                         1296:          movlw   D'38'
+058C  00B6     MOVWF 0x36                         1297:          movwf   timercount
+058D  2D93     GOTO 0x593                         1298:          goto    finish
+                                                  1299:  
+                                                  1300:  addsignal
+058E  1283     BCF STATUS, 0x5                    1301:          banksel PORTB
+058F  1303     BCF STATUS, 0x6
+0590  1C06     BTFSS PORTB, 0x0                   1302:          btfss   PORTB, 0
+0591  2D93     GOTO 0x593                         1303:              goto    finish
+0592  0ABF     INCF 0x3F, F                       1304:          incf    signal
+                                                  1305:  
+                                                  1306:  finish
+0593  0831     MOVF 0x31, W                       1307:          movf status_temp, w
+0594  0083     MOVWF STATUS                       1308:          movwf STATUS
+0595  0EB0     SWAPF 0x30, F                      1309:          swapf w_temp, f
+0596  0E30     SWAPF 0x30, W                      1310:          swapf w_temp, w
+0597  0009     RETFIE                             1311:          retfie
+                                                  1312:  
+                                                  1313:  write_EE
+                                                  1314:  ;write to EEPROM
+0598  1283     BCF STATUS, 0x5                    1315:      banksel ADDRL
+0599  1303     BCF STATUS, 0x6
+059A  083C     MOVF 0x3C, W                       1316:      movf    ADDRL, W ; write address of desired program memory location
+059B  1283     BCF STATUS, 0x5                    1317:      banksel EEADR
+059C  1703     BSF STATUS, 0x6
+059D  008D     MOVWF PIR2                         1318:      movwf   EEADR
+                                                  1319:  ;    movf    ADDRH, W
+                                                  1320:  ;    movwf   EEADRH
+059E  1283     BCF STATUS, 0x5                    1321:      banksel VALUEL
+059F  1303     BCF STATUS, 0x6
+05A0  083E     MOVF 0x3E, W                       1322:      movf    VALUEL, W ; write value to program at desired memory locqation
+05A1  1283     BCF STATUS, 0x5                    1323:      banksel EEDATA
+05A2  1703     BSF STATUS, 0x6
+05A3  008C     MOVWF PIR1                         1324:      movwf   EEDATA
+                                                  1325:  ;    movf    VALUEH, W
+                                                  1326:  ;    movwf   EEDATH
+                                                  1327:  
+05A4  1683     BSF STATUS, 0x5                    1328:      bsf     STATUS, RP0
+05A5  178C     BSF PIR1, 0x7                      1329:      bsf     EECON1, EEPGD
+05A6  150C     BSF PIR1, 0x2                      1330:      bsf     EECON1, WREN
+05A7  138B     BCF INTCON, 0x7                    1331:      bcf     INTCON, GIE
+                                                  1332:  
+05A8  3055     MOVLW 0x55                         1333:      movlw   0x55
+05A9  008D     MOVWF PIR2                         1334:      movwf   EECON2
+05AA  30AA     MOVLW 0xAA                         1335:      movlw   0xaa
+05AB  008D     MOVWF PIR2                         1336:      movwf   EECON2 ;
+05AC  148C     BSF PIR1, 0x1                      1337:      bsf     EECON1, WR ; start write operation
+05AD  0000     NOP                                1338:      nop ;wait for micro
+05AE  0000     NOP                                1339:      nop
+                                                  1340:  
+05AF  178B     BSF INTCON, 0x7                    1341:      bsf    INTCON, GIE ;re-enable interrupts
+05B0  110C     BCF PIR1, 0x2                      1342:      bcf    EECON1, WREN ;disables writes
+05B1  1283     BCF STATUS, 0x5                    1343:      bcf    STATUS, RP0
+05B2  1303     BCF STATUS, 0x6                    1344:      bcf    STATUS, RP1 
+05B3  0008     RETURN                             1345:      return
+                                                  1346:  
+                                                  1347:  write_EES
+05B4  1283     BCF STATUS, 0x5                    1348:      banksel ADDRL
+05B5  1303     BCF STATUS, 0x6
+05B6  083C     MOVF 0x3C, W                       1349:      movf    ADDRL, W ; write address of desired program memory location
+05B7  1283     BCF STATUS, 0x5                    1350:      banksel EEADR
+05B8  1703     BSF STATUS, 0x6
+05B9  008D     MOVWF PIR2                         1351:      movwf   EEADR
+                                                  1352:  
+05BA  1683     BSF STATUS, 0x5                    1353:      bsf     STATUS, RP0
+05BB  178C     BSF PIR1, 0x7                      1354:      bsf     EECON1, EEPGD
+05BC  150C     BSF PIR1, 0x2                      1355:      bsf     EECON1, WREN
+05BD  138B     BCF INTCON, 0x7                    1356:      bcf     INTCON, GIE
+                                                  1357:  
+05BE  3055     MOVLW 0x55                         1358:      movlw   0x55
+05BF  008D     MOVWF PIR2                         1359:      movwf   EECON2
+05C0  30AA     MOVLW 0xAA                         1360:      movlw   0xaa
+05C1  008D     MOVWF PIR2                         1361:      movwf   EECON2 ;
+05C2  148C     BSF PIR1, 0x1                      1362:      bsf     EECON1, WR ; start write operation
+05C3  0000     NOP                                1363:      nop ;wait for micro
+05C4  0000     NOP                                1364:      nop
+                                                  1365:  
+05C5  178B     BSF INTCON, 0x7                    1366:      bsf    INTCON, GIE ;re-enable interrupts
+05C6  110C     BCF PIR1, 0x2                      1367:      bcf    EECON1, WREN ;disables writes
+05C7  1283     BCF STATUS, 0x5                    1368:      bcf    STATUS, RP0
+05C8  1303     BCF STATUS, 0x6                    1369:      bcf    STATUS, RP1
+05C9  0008     RETURN                             1370:      return
+                                                  1371:  
+                                                  1372:  read_EE
+05CA  1283     BCF STATUS, 0x5                    1373:      banksel ADDRL
+05CB  1303     BCF STATUS, 0x6
+05CC  083C     MOVF 0x3C, W                       1374:      movf   ADDRL, W
+05CD  1283     BCF STATUS, 0x5                    1375:      banksel EEADR
+05CE  1703     BSF STATUS, 0x6
+05CF  008D     MOVWF PIR2                         1376:      movwf   EEADR
+05D0  1683     BSF STATUS, 0x5                    1377:      banksel EECON1
+05D1  1703     BSF STATUS, 0x6
+05D2  178C     BSF PIR1, 0x7                      1378:      bsf     EECON1, EEPGD
+05D3  140C     BSF PIR1, 0x0                      1379:      bsf     EECON1, RD
+05D4  0000     NOP                                1380:      nop
+05D5  0000     NOP                                1381:      nop
+05D6  1283     BCF STATUS, 0x5                    1382:      bcf     STATUS, RP0
+05D7  080C     MOVF PIR1, W                       1383:      movf    EEDATA, W
+05D8  1283     BCF STATUS, 0x5                    1384:      banksel DATAL
+05D9  1303     BCF STATUS, 0x6
+05DA  00BD     MOVWF 0x3D                         1385:      movwf   DATAL
+05DB  1283     BCF STATUS, 0x5                    1386:      bcf     STATUS, RP0
+05DC  1303     BCF STATUS, 0x6                    1387:      bcf     STATUS, RP1
+05DD  0008     RETURN                             1388:      return
+                                                  1389:  
+                                                  1390:  shift_EE
+                                                  1391:      ;shift 8 to 9
+05DE  1283     BCF STATUS, 0x5                    1392:      banksel DATAL
+05DF  1303     BCF STATUS, 0x6
+05E0  302C     MOVLW 0x2C                         1393:      movlw   0x2c
+05E1  00BC     MOVWF 0x3C                         1394:      movwf   ADDRL
+05E2  25CA     CALL 0x5CA                         1395:      call    read_EE
+05E3  3030     MOVLW 0x30                         1396:      movlw   0x30
+05E4  00BC     MOVWF 0x3C                         1397:      movwf   ADDRL
+05E5  25B4     CALL 0x5B4                         1398:      call    write_EES
+                                                  1399:  
+05E6  302D     MOVLW 0x2D                         1400:      movlw   0x2d
+05E7  00BC     MOVWF 0x3C                         1401:      movwf   ADDRL
+05E8  25CA     CALL 0x5CA                         1402:      call    read_EE
+05E9  3031     MOVLW 0x31                         1403:      movlw   0x31
+05EA  00BC     MOVWF 0x3C                         1404:      movwf   ADDRL
+05EB  25B4     CALL 0x5B4                         1405:      call    write_EES
+                                                  1406:  
+05EC  302E     MOVLW 0x2E                         1407:      movlw   0x2e
+05ED  00BC     MOVWF 0x3C                         1408:      movwf   ADDRL
+05EE  25CA     CALL 0x5CA                         1409:      call    read_EE
+05EF  3032     MOVLW 0x32                         1410:      movlw   0x32
+05F0  00BC     MOVWF 0x3C                         1411:      movwf   ADDRL
+05F1  25B4     CALL 0x5B4                         1412:      call    write_EES
+                                                  1413:  
+05F2  302F     MOVLW 0x2F                         1414:      movlw   0x2f
+05F3  00BC     MOVWF 0x3C                         1415:      movwf   ADDRL
+05F4  25CA     CALL 0x5CA                         1416:      call    read_EE
+05F5  3033     MOVLW 0x33                         1417:      movlw   0x33
+05F6  00BC     MOVWF 0x3C                         1418:      movwf   ADDRL
+05F7  25B4     CALL 0x5B4                         1419:      call    write_EES
+                                                  1420:  
+                                                  1421:      ;shift 7 to 8
+05F8  1283     BCF STATUS, 0x5                    1422:      banksel DATAL
+05F9  1303     BCF STATUS, 0x6
+05FA  3028     MOVLW 0x28                         1423:      movlw   0x28
+05FB  00BC     MOVWF 0x3C                         1424:      movwf   ADDRL
+05FC  25CA     CALL 0x5CA                         1425:      call    read_EE
+05FD  302C     MOVLW 0x2C                         1426:      movlw   0x2c
+05FE  00BC     MOVWF 0x3C                         1427:      movwf   ADDRL
+05FF  25B4     CALL 0x5B4                         1428:      call    write_EES
+                                                  1429:  
+0600  3029     MOVLW 0x29                         1430:      movlw   0x29
+0601  00BC     MOVWF 0x3C                         1431:      movwf   ADDRL
+0602  25CA     CALL 0x5CA                         1432:      call    read_EE
+0603  302D     MOVLW 0x2D                         1433:      movlw   0x2d
+0604  00BC     MOVWF 0x3C                         1434:      movwf   ADDRL
+0605  25B4     CALL 0x5B4                         1435:      call    write_EES
+                                                  1436:  
+0606  302A     MOVLW 0x2A                         1437:      movlw   0x2a
+0607  00BC     MOVWF 0x3C                         1438:      movwf   ADDRL
+0608  25CA     CALL 0x5CA                         1439:      call    read_EE
+0609  302E     MOVLW 0x2E                         1440:      movlw   0x2e
+060A  00BC     MOVWF 0x3C                         1441:      movwf   ADDRL
+060B  25B4     CALL 0x5B4                         1442:      call    write_EES
+                                                  1443:  
+060C  302B     MOVLW 0x2B                         1444:      movlw   0x2b
+060D  00BC     MOVWF 0x3C                         1445:      movwf   ADDRL
+060E  25CA     CALL 0x5CA                         1446:      call    read_EE
+060F  302F     MOVLW 0x2F                         1447:      movlw   0x2f
+0610  00BC     MOVWF 0x3C                         1448:      movwf   ADDRL
+0611  25B4     CALL 0x5B4                         1449:      call    write_EES
+                                                  1450:  
+                                                  1451:      ;shift 6 to 7
+0612  1283     BCF STATUS, 0x5                    1452:      banksel DATAL
+0613  1303     BCF STATUS, 0x6
+0614  3024     MOVLW 0x24                         1453:      movlw   0x24
+0615  00BC     MOVWF 0x3C                         1454:      movwf   ADDRL
+0616  25CA     CALL 0x5CA                         1455:      call    read_EE
+0617  3028     MOVLW 0x28                         1456:      movlw   0x28
+0618  00BC     MOVWF 0x3C                         1457:      movwf   ADDRL
+0619  25B4     CALL 0x5B4                         1458:      call    write_EES
+                                                  1459:  
+061A  3025     MOVLW 0x25                         1460:      movlw   0x25
+061B  00BC     MOVWF 0x3C                         1461:      movwf   ADDRL
+061C  25CA     CALL 0x5CA                         1462:      call    read_EE
+061D  3029     MOVLW 0x29                         1463:      movlw   0x29
+061E  00BC     MOVWF 0x3C                         1464:      movwf   ADDRL
+061F  25B4     CALL 0x5B4                         1465:      call    write_EES
+                                                  1466:  
+0620  3026     MOVLW 0x26                         1467:      movlw   0x26
+0621  00BC     MOVWF 0x3C                         1468:      movwf   ADDRL
+0622  25CA     CALL 0x5CA                         1469:      call    read_EE
+0623  302A     MOVLW 0x2A                         1470:      movlw   0x2a
+0624  00BC     MOVWF 0x3C                         1471:      movwf   ADDRL
+0625  25B4     CALL 0x5B4                         1472:      call    write_EES
+                                                  1473:  
+0626  3027     MOVLW 0x27                         1474:      movlw   0x27
+0627  00BC     MOVWF 0x3C                         1475:      movwf   ADDRL
+0628  25CA     CALL 0x5CA                         1476:      call    read_EE
+0629  302B     MOVLW 0x2B                         1477:      movlw   0x2b
+062A  00BC     MOVWF 0x3C                         1478:      movwf   ADDRL
+062B  25B4     CALL 0x5B4                         1479:      call    write_EES
+                                                  1480:  
+                                                  1481:      ;shift 5 to 6
+062C  1283     BCF STATUS, 0x5                    1482:      banksel DATAL
+062D  1303     BCF STATUS, 0x6
+062E  3020     MOVLW 0x20                         1483:      movlw   0x20
+062F  00BC     MOVWF 0x3C                         1484:      movwf   ADDRL
+0630  25CA     CALL 0x5CA                         1485:      call    read_EE
+0631  3024     MOVLW 0x24                         1486:      movlw   0x24
+0632  00BC     MOVWF 0x3C                         1487:      movwf   ADDRL
+0633  25B4     CALL 0x5B4                         1488:      call    write_EES
+                                                  1489:  
+0634  3021     MOVLW 0x21                         1490:      movlw   0x21
+0635  00BC     MOVWF 0x3C                         1491:      movwf   ADDRL
+0636  25CA     CALL 0x5CA                         1492:      call    read_EE
+0637  3025     MOVLW 0x25                         1493:      movlw   0x25
+0638  00BC     MOVWF 0x3C                         1494:      movwf   ADDRL
+0639  25B4     CALL 0x5B4                         1495:      call    write_EES
+                                                  1496:  
+063A  3022     MOVLW 0x22                         1497:      movlw   0x22
+063B  00BC     MOVWF 0x3C                         1498:      movwf   ADDRL
+063C  25CA     CALL 0x5CA                         1499:      call    read_EE
+063D  3026     MOVLW 0x26                         1500:      movlw   0x26
+063E  00BC     MOVWF 0x3C                         1501:      movwf   ADDRL
+063F  25B4     CALL 0x5B4                         1502:      call    write_EES
+                                                  1503:  
+0640  3023     MOVLW 0x23                         1504:      movlw   0x23
+0641  00BC     MOVWF 0x3C                         1505:      movwf   ADDRL
+0642  25CA     CALL 0x5CA                         1506:      call    read_EE
+0643  3027     MOVLW 0x27                         1507:      movlw   0x27
+0644  00BC     MOVWF 0x3C                         1508:      movwf   ADDRL
+0645  25B4     CALL 0x5B4                         1509:      call    write_EES
+                                                  1510:  
+                                                  1511:      ;shift 4 to 5
+0646  1283     BCF STATUS, 0x5                    1512:      banksel DATAL
+0647  1303     BCF STATUS, 0x6
+0648  301C     MOVLW 0x1C                         1513:      movlw   0x1c
+0649  00BC     MOVWF 0x3C                         1514:      movwf   ADDRL
+064A  25CA     CALL 0x5CA                         1515:      call    read_EE
+064B  3020     MOVLW 0x20                         1516:      movlw   0x20
+064C  00BC     MOVWF 0x3C                         1517:      movwf   ADDRL
+064D  25B4     CALL 0x5B4                         1518:      call    write_EES
+                                                  1519:  
+064E  301D     MOVLW 0x1D                         1520:      movlw   0x1d
+064F  00BC     MOVWF 0x3C                         1521:      movwf   ADDRL
+0650  25CA     CALL 0x5CA                         1522:      call    read_EE
+0651  3021     MOVLW 0x21                         1523:      movlw   0x21
+0652  00BC     MOVWF 0x3C                         1524:      movwf   ADDRL
+0653  25B4     CALL 0x5B4                         1525:      call    write_EES
+                                                  1526:  
+0654  301E     MOVLW 0x1E                         1527:      movlw   0x1e
+0655  00BC     MOVWF 0x3C                         1528:      movwf   ADDRL
+0656  25CA     CALL 0x5CA                         1529:      call    read_EE
+0657  3022     MOVLW 0x22                         1530:      movlw   0x22
+0658  00BC     MOVWF 0x3C                         1531:      movwf   ADDRL
+0659  25B4     CALL 0x5B4                         1532:      call    write_EES
+                                                  1533:  
+065A  301F     MOVLW 0x1F                         1534:      movlw   0x1f
+065B  00BC     MOVWF 0x3C                         1535:      movwf   ADDRL
+065C  25CA     CALL 0x5CA                         1536:      call    read_EE
+065D  3023     MOVLW 0x23                         1537:      movlw   0x23
+065E  00BC     MOVWF 0x3C                         1538:      movwf   ADDRL
+065F  25B4     CALL 0x5B4                         1539:      call    write_EES
+                                                  1540:  
+                                                  1541:      ;shift 3 to 4
+0660  1283     BCF STATUS, 0x5                    1542:      banksel DATAL
+0661  1303     BCF STATUS, 0x6
+0662  3018     MOVLW 0x18                         1543:      movlw   0x18
+0663  00BC     MOVWF 0x3C                         1544:      movwf   ADDRL
+0664  25CA     CALL 0x5CA                         1545:      call    read_EE
+0665  301C     MOVLW 0x1C                         1546:      movlw   0x1c
+0666  00BC     MOVWF 0x3C                         1547:      movwf   ADDRL
+0667  25B4     CALL 0x5B4                         1548:      call    write_EES
+                                                  1549:  
+0668  3019     MOVLW 0x19                         1550:      movlw   0x19
+0669  00BC     MOVWF 0x3C                         1551:      movwf   ADDRL
+066A  25CA     CALL 0x5CA                         1552:      call    read_EE
+066B  301D     MOVLW 0x1D                         1553:      movlw   0x1d
+066C  00BC     MOVWF 0x3C                         1554:      movwf   ADDRL
+066D  25B4     CALL 0x5B4                         1555:      call    write_EES
+                                                  1556:  
+066E  301A     MOVLW 0x1A                         1557:      movlw   0x1a
+066F  00BC     MOVWF 0x3C                         1558:      movwf   ADDRL
+0670  25CA     CALL 0x5CA                         1559:      call    read_EE
+0671  301E     MOVLW 0x1E                         1560:      movlw   0x1e
+0672  00BC     MOVWF 0x3C                         1561:      movwf   ADDRL
+0673  25B4     CALL 0x5B4                         1562:      call    write_EES
+                                                  1563:  
+0674  301B     MOVLW 0x1B                         1564:      movlw   0x1b
+0675  00BC     MOVWF 0x3C                         1565:      movwf   ADDRL
+0676  25CA     CALL 0x5CA                         1566:      call    read_EE
+0677  301F     MOVLW 0x1F                         1567:      movlw   0x1f
+0678  00BC     MOVWF 0x3C                         1568:      movwf   ADDRL
+0679  25B4     CALL 0x5B4                         1569:      call    write_EES
+                                                  1570:  
+                                                  1571:      ;shift 2 to 3
+067A  1283     BCF STATUS, 0x5                    1572:      banksel DATAL
+067B  1303     BCF STATUS, 0x6
+067C  3014     MOVLW 0x14                         1573:      movlw   0x14
+067D  00BC     MOVWF 0x3C                         1574:      movwf   ADDRL
+067E  25CA     CALL 0x5CA                         1575:      call    read_EE
+067F  3018     MOVLW 0x18                         1576:      movlw   0x18
+0680  00BC     MOVWF 0x3C                         1577:      movwf   ADDRL
+0681  25B4     CALL 0x5B4                         1578:      call    write_EES
+                                                  1579:  
+0682  3015     MOVLW 0x15                         1580:      movlw   0x15
+0683  00BC     MOVWF 0x3C                         1581:      movwf   ADDRL
+0684  25CA     CALL 0x5CA                         1582:      call    read_EE
+0685  3019     MOVLW 0x19                         1583:      movlw   0x19
+0686  00BC     MOVWF 0x3C                         1584:      movwf   ADDRL
+0687  25B4     CALL 0x5B4                         1585:      call    write_EES
+                                                  1586:  
+0688  3016     MOVLW 0x16                         1587:      movlw   0x16
+0689  00BC     MOVWF 0x3C                         1588:      movwf   ADDRL
+068A  25CA     CALL 0x5CA                         1589:      call    read_EE
+068B  301A     MOVLW 0x1A                         1590:      movlw   0x1a
+068C  00BC     MOVWF 0x3C                         1591:      movwf   ADDRL
+068D  25B4     CALL 0x5B4                         1592:      call    write_EES
+                                                  1593:  
+068E  3017     MOVLW 0x17                         1594:      movlw   0x17
+068F  00BC     MOVWF 0x3C                         1595:      movwf   ADDRL
+0690  25CA     CALL 0x5CA                         1596:      call    read_EE
+0691  301B     MOVLW 0x1B                         1597:      movlw   0x1b
+0692  00BC     MOVWF 0x3C                         1598:      movwf   ADDRL
+0693  25B4     CALL 0x5B4                         1599:      call    write_EES
+                                                  1600:  
+                                                  1601:      ;shift 1 to 2
+0694  1283     BCF STATUS, 0x5                    1602:      banksel DATAL
+0695  1303     BCF STATUS, 0x6
+0696  3010     MOVLW 0x10                         1603:      movlw   0x10
+0697  00BC     MOVWF 0x3C                         1604:      movwf   ADDRL
+0698  25CA     CALL 0x5CA                         1605:      call    read_EE
+0699  3014     MOVLW 0x14                         1606:      movlw   0x14
+069A  00BC     MOVWF 0x3C                         1607:      movwf   ADDRL
+069B  25B4     CALL 0x5B4                         1608:      call    write_EES
+                                                  1609:  
+069C  3011     MOVLW 0x11                         1610:      movlw   0x11
+069D  00BC     MOVWF 0x3C                         1611:      movwf   ADDRL
+069E  25CA     CALL 0x5CA                         1612:      call    read_EE
+069F  3015     MOVLW 0x15                         1613:      movlw   0x15
+06A0  00BC     MOVWF 0x3C                         1614:      movwf   ADDRL
+06A1  25B4     CALL 0x5B4                         1615:      call    write_EES
+                                                  1616:  
+06A2  3012     MOVLW 0x12                         1617:      movlw   0x12
+06A3  00BC     MOVWF 0x3C                         1618:      movwf   ADDRL
+06A4  25CA     CALL 0x5CA                         1619:      call    read_EE
+06A5  3016     MOVLW 0x16                         1620:      movlw   0x16
+06A6  00BC     MOVWF 0x3C                         1621:      movwf   ADDRL
+06A7  25B4     CALL 0x5B4                         1622:      call    write_EES
+                                                  1623:  
+06A8  3013     MOVLW 0x13                         1624:      movlw   0x13
+06A9  00BC     MOVWF 0x3C                         1625:      movwf   ADDRL
+06AA  25CA     CALL 0x5CA                         1626:      call    read_EE
+06AB  3017     MOVLW 0x17                         1627:      movlw   0x17
+06AC  00BC     MOVWF 0x3C                         1628:      movwf   ADDRL
+06AD  25B4     CALL 0x5B4                         1629:      call    write_EES
+                                                  1630:  
+06AE  0008     RETURN                             1631:      return
+                                                  1632:  
+2007  0000     NOP                                1633:  END
+---  /Users/Judy/MPLABXProjects/Interface16.X/i2c_common.asm  -------------------------------------------
+                                                  1:         include <p16f877.inc>
+                                                  2:     	errorlevel	-302
+                                                  3:     	errorlevel	-305
+                                                  4:     
+                                                  5:     ;global labels
+                                                  6:     
+                                                  7:     	global	write_rtc,read_rtc,rtc_convert,i2c_common_setup,p2p_write,p2p_read
+                                                  8:     
+                                                  9:     ;Definition and variable declarations;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+                                                  10:            cblock    0x71			;these variable names are for reference only. The following
+                                                  11:            dt1			;0x71		 addresses are used for the RTC module
+                                                  12:            dt2			;0x72
+                                                  13:            ADD			;0x73
+                                                  14:            DAT			;0x74
+                                                  15:            DOUT		;0x75
+                                                  16:            B1			;0x76
+                                                  17:    		dig10		;0x77
+                                                  18:    		dig1		;0x78
+                                                  19:            endc
+                                                  20:    
+                                                  21:    ;I2C lowest layer macros;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+                                                  22:    
+                                                  23:    i2c_common_check_ack	macro	err_address		;If bad ACK bit received, goto err_address
+                                                  24:    	banksel		SSPCON2
+                                                  25:        btfsc       SSPCON2,ACKSTAT
+                                                  26:        goto        err_address
+                                                  27:    	endm
+                                                  28:    
+                                                  29:    i2c_common_start	macro
+                                                  30:    ;input:		none
+                                                  31:    ;output:	none
+                                                  32:    ;desc:		initiate start conditionon the bus
+                                                  33:    	banksel     SSPCON2
+                                                  34:        bsf         SSPCON2,SEN
+                                                  35:        btfsc       SSPCON2,SEN
+                                                  36:        goto        $-1
+                                                  37:    	endm
+                                                  38:    
+                                                  39:    i2c_common_stop	macro
+                                                  40:    ;input: 	none
+                                                  41:    ;output:	none
+                                                  42:    ;desc:		initiate stop condition on the bus
+                                                  43:    	banksel     SSPCON2
+                                                  44:        bsf         SSPCON2,PEN
+                                                  45:        btfsc       SSPCON2,PEN
+                                                  46:        goto        $-1
+                                                  47:    	endm
+                                                  48:    
+                                                  49:    i2c_common_repeatedstart	macro
+                                                  50:    ;input:		none
+                                                  51:    ;output:	none
+                                                  52:    ;desc:		initiate repeated start on the bus. Usually used for
+                                                  53:    ;			changing direction of SDA without STOP event
+                                                  54:    	banksel     SSPCON2
+                                                  55:        bsf         SSPCON2,RSEN
+                                                  56:        btfsc       SSPCON2,RSEN
+                                                  57:        goto        $-1
+                                                  58:    	endm
+                                                  59:    
+                                                  60:    i2c_common_ack		macro
+                                                  61:    ;input:		none
+                                                  62:    ;output:	none
+                                                  63:    ;desc:		send an acknowledge to slave device
+                                                  64:        banksel     SSPCON2
+                                                  65:        bcf         SSPCON2,ACKDT
+                                                  66:        bsf         SSPCON2,ACKEN
+                                                  67:        btfsc       SSPCON2,ACKEN
+                                                  68:        goto        $-1
+                                                  69:        endm
+                                                  70:    
+                                                  71:    i2c_common_nack	macro
+                                                  72:    ;input:		none
+                                                  73:    ;output:	none
+                                                  74:    ;desc:		send an not acknowledge to slave device
+                                                  75:       banksel     SSPCON2
+                                                  76:       bsf         SSPCON2,ACKDT
+                                                  77:       bsf         SSPCON2,ACKEN
+                                                  78:       btfsc       SSPCON2,ACKEN
+                                                  79:       goto        $-1
+                                                  80:       endm
+                                                  81:    
+                                                  82:    i2c_common_write	macro
+                                                  83:    ;input:		W
+                                                  84:    ;output:	to slave device
+                                                  85:    ;desc:		writes W to SSPBUF and send to slave device. Make sure
+                                                  86:    ;			transmit is finished before continuing
+                                                  87:       banksel     SSPBUF
+                                                  88:       movwf       SSPBUF
+                                                  89:       banksel     SSPSTAT
+                                                  90:       btfsc       SSPSTAT,R_W 		;While transmit is in progress, wait
+                                                  91:       goto        $-1
+                                                  92:       banksel     SSPCON2
+                                                  93:       endm
+                                                  94:    
+                                                  95:    i2c_common_read	macro
+                                                  96:    ;input:		none
+                                                  97:    ;output:	W
+                                                  98:    ;desc:		reads data from slave and saves it in W.
+                                                  99:       banksel     SSPCON2
+                                                  100:      bsf         SSPCON2,RCEN    ;Begin receiving byte from
+                                                  101:      btfsc       SSPCON2,RCEN
+                                                  102:      goto        $-1
+                                                  103:      banksel     SSPBUF
+                                                  104:      movf        SSPBUF,w
+                                                  105:      endm
+                                                  106:   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+                                                  107:   
+                                                  108:   	code
+                                                  109:   
+                                                  110:   i2c_common_setup
+                                                  111:   ;input:		none
+                                                  112:   ;output:	none
+                                                  113:   ;desc:		sets up I2C as master device with 100kHz baud rate
+06AF  1683     BSF STATUS, 0x5                    114:   	banksel		SSPSTAT
+06B0  1303     BCF STATUS, 0x6
+06B1  0194     CLRF SSPCON                        115:       clrf        SSPSTAT         ;I2C line levels, and clear all flags
+06B2  3018     MOVLW 0x18                         116:       movlw       d'24'         	;100kHz baud rate: 10MHz osc / [4*(24+1)]
+06B3  1683     BSF STATUS, 0x5                    117:   	banksel		SSPADD
+06B4  1303     BCF STATUS, 0x6
+06B5  0093     MOVWF SSPBUF                       118:       movwf       SSPADD          ;RTC only supports 100kHz
+                                                  119:   
+06B6  3008     MOVLW 0x8                          120:       movlw       b'00001000'     ;Config SSP for Master Mode I2C
+06B7  1283     BCF STATUS, 0x5                    121:   	banksel		SSPCON
+06B8  1303     BCF STATUS, 0x6
+06B9  0094     MOVWF SSPCON                       122:       movwf       SSPCON
+06BA  1694     BSF SSPCON, 0x5                    123:       bsf         SSPCON,SSPEN    ;Enable SSP module
+06BB  1683     BSF STATUS, 0x5                    124:       i2c_common_stop        		;Ensure the bus is free
+06BC  1303     BCF STATUS, 0x6
+06BD  1511     BSF TMR2, 0x2
+06BE  1911     BTFSC TMR2, 0x2
+06BF  2EBE     GOTO 0x6BE
+06C0  0008     RETURN                             125:   	return
+                                                  126:   
+                                                  127:   ;rtc Algorithms;;;;;;
+                                                  128:   
+                                                  129:   write_rtc
+                                                  130:   ;input:		address of register in RTC
+                                                  131:   ;output:	none
+                                                  132:   ;Desc:		handles writing data to RTC
+                                                  133:           ;Select the DS1307 on the bus, in WRITE mode
+06C1  1683     BSF STATUS, 0x5                    134:           i2c_common_start
+06C2  1303     BCF STATUS, 0x6
+06C3  1411     BSF TMR2, 0x0
+06C4  1811     BTFSC TMR2, 0x0
+06C5  2EC4     GOTO 0x6C4
+06C6  30D0     MOVLW 0xD0                         135:           movlw       0xD0        ;DS1307 address | WRITE bit
+06C7  1283     BCF STATUS, 0x5                    136:           i2c_common_write
+06C8  1303     BCF STATUS, 0x6
+06C9  0093     MOVWF SSPBUF
+06CA  1683     BSF STATUS, 0x5
+06CB  1303     BCF STATUS, 0x6
+06CC  1914     BTFSC SSPCON, 0x2
+06CD  2ECC     GOTO 0x6CC
+06CE  1683     BSF STATUS, 0x5
+06CF  1303     BCF STATUS, 0x6
+06D0  1683     BSF STATUS, 0x5                    137:           i2c_common_check_ack   WR_ERR
+06D1  1303     BCF STATUS, 0x6
+06D2  1B11     BTFSC TMR2, 0x6
+06D3  2EF5     GOTO 0x6F5
+                                                  138:   
+                                                  139:           ;Write data to I2C bus (Register Address in RTC)
+06D4  1283     BCF STATUS, 0x5                    140:   		banksel		0x73
+06D5  1303     BCF STATUS, 0x6
+06D6  0873     MOVF 0x73, W                       141:           movf        0x73,w       ;Set register pointer in RTC
+06D7  1283     BCF STATUS, 0x5                    142:           i2c_common_write
+06D8  1303     BCF STATUS, 0x6
+06D9  0093     MOVWF SSPBUF
+06DA  1683     BSF STATUS, 0x5
+06DB  1303     BCF STATUS, 0x6
+06DC  1914     BTFSC SSPCON, 0x2
+06DD  2EDC     GOTO 0x6DC
+06DE  1683     BSF STATUS, 0x5
+06DF  1303     BCF STATUS, 0x6
+06E0  1683     BSF STATUS, 0x5                    143:           i2c_common_check_ack   WR_ERR
+06E1  1303     BCF STATUS, 0x6
+06E2  1B11     BTFSC TMR2, 0x6
+06E3  2EF5     GOTO 0x6F5
+                                                  144:   
+                                                  145:           ;Write data to I2C bus (Data to be placed in RTC register)
+06E4  1283     BCF STATUS, 0x5                    146:   		banksel		0x74
+06E5  1303     BCF STATUS, 0x6
+06E6  0874     MOVF 0x74, W                       147:           movf        0x74,w       ;Write data to register in RTC
+06E7  1283     BCF STATUS, 0x5                    148:           i2c_common_write
+06E8  1303     BCF STATUS, 0x6
+06E9  0093     MOVWF SSPBUF
+06EA  1683     BSF STATUS, 0x5
+06EB  1303     BCF STATUS, 0x6
+06EC  1914     BTFSC SSPCON, 0x2
+06ED  2EEC     GOTO 0x6EC
+06EE  1683     BSF STATUS, 0x5
+06EF  1303     BCF STATUS, 0x6
+06F0  1683     BSF STATUS, 0x5                    149:           i2c_common_check_ack   WR_ERR
+06F1  1303     BCF STATUS, 0x6
+06F2  1B11     BTFSC TMR2, 0x6
+06F3  2EF5     GOTO 0x6F5
+06F4  2EF6     GOTO 0x6F6                         150:           goto        WR_END
+                                                  151:   WR_ERR
+06F5  0000     NOP                                152:           nop
+                                                  153:   WR_END
+06F6  1683     BSF STATUS, 0x5                    154:   		i2c_common_stop	;Release the I2C bus
+06F7  1303     BCF STATUS, 0x6
+06F8  1511     BSF TMR2, 0x2
+06F9  1911     BTFSC TMR2, 0x2
+06FA  2EF9     GOTO 0x6F9
+06FB  0008     RETURN                             155:           return
+                                                  156:   
+                                                  157:   read_rtc
+                                                  158:   ;input:		address of RTC
+                                                  159:   ;output:	DOUT or 0x75
+                                                  160:   ;Desc:		This reads from the selected address of the RTC
+                                                  161:   ;			and saves it into DOUT or address 0x75
+                                                  162:           ;Select the DS1307 on the bus, in WRITE mode
+06FC  1683     BSF STATUS, 0x5                    163:           i2c_common_start
+06FD  1303     BCF STATUS, 0x6
+06FE  1411     BSF TMR2, 0x0
+06FF  1811     BTFSC TMR2, 0x0
+0700  2EFF     GOTO 0x6FF
+0701  30D0     MOVLW 0xD0                         164:           movlw       0xD0        ;DS1307 address | WRITE bit
+0702  1283     BCF STATUS, 0x5                    165:           i2c_common_write
+0703  1303     BCF STATUS, 0x6
+0704  0093     MOVWF SSPBUF
+0705  1683     BSF STATUS, 0x5
+0706  1303     BCF STATUS, 0x6
+0707  1914     BTFSC SSPCON, 0x2
+0708  2F07     GOTO 0x707
+0709  1683     BSF STATUS, 0x5
+070A  1303     BCF STATUS, 0x6
+070B  1683     BSF STATUS, 0x5                    166:           i2c_common_check_ack   RD_ERR
+070C  1303     BCF STATUS, 0x6
+070D  1B11     BTFSC TMR2, 0x6
+070E  2F44     GOTO 0x744
+                                                  167:   
+                                                  168:           ;Write data to I2C bus (Register Address in RTC)
+070F  1283     BCF STATUS, 0x5                    169:   		banksel		0x73
+0710  1303     BCF STATUS, 0x6
+0711  0873     MOVF 0x73, W                       170:           movf        0x73,w       ;Set register pointer in RTC
+0712  1283     BCF STATUS, 0x5                    171:           i2c_common_write
+0713  1303     BCF STATUS, 0x6
+0714  0093     MOVWF SSPBUF
+0715  1683     BSF STATUS, 0x5
+0716  1303     BCF STATUS, 0x6
+0717  1914     BTFSC SSPCON, 0x2
+0718  2F17     GOTO 0x717
+0719  1683     BSF STATUS, 0x5
+071A  1303     BCF STATUS, 0x6
+071B  1683     BSF STATUS, 0x5                    172:           i2c_common_check_ack   RD_ERR
+071C  1303     BCF STATUS, 0x6
+071D  1B11     BTFSC TMR2, 0x6
+071E  2F44     GOTO 0x744
+                                                  173:   
+                                                  174:           ;Re-Select the DS1307 on the bus, in READ mode
+071F  1683     BSF STATUS, 0x5                    175:           i2c_common_repeatedstart
+0720  1303     BCF STATUS, 0x6
+0721  1491     BSF TMR2, 0x1
+0722  1891     BTFSC TMR2, 0x1
+0723  2F22     GOTO 0x722
+0724  30D1     MOVLW 0xD1                         176:           movlw       0xD1        ;DS1307 address | READ bit
+0725  1283     BCF STATUS, 0x5                    177:           i2c_common_write
+0726  1303     BCF STATUS, 0x6
+0727  0093     MOVWF SSPBUF
+0728  1683     BSF STATUS, 0x5
+0729  1303     BCF STATUS, 0x6
+072A  1914     BTFSC SSPCON, 0x2
+072B  2F2A     GOTO 0x72A
+072C  1683     BSF STATUS, 0x5
+072D  1303     BCF STATUS, 0x6
+072E  1683     BSF STATUS, 0x5                    178:           i2c_common_check_ack   RD_ERR
+072F  1303     BCF STATUS, 0x6
+0730  1B11     BTFSC TMR2, 0x6
+0731  2F44     GOTO 0x744
+                                                  179:   
+                                                  180:           ;Read data from I2C bus (Contents of Register in RTC)
+0732  1683     BSF STATUS, 0x5                    181:           i2c_common_read
+0733  1303     BCF STATUS, 0x6
+0734  1591     BSF TMR2, 0x3
+0735  1991     BTFSC TMR2, 0x3
+0736  2F35     GOTO 0x735
+0737  1283     BCF STATUS, 0x5
+0738  1303     BCF STATUS, 0x6
+0739  0813     MOVF SSPBUF, W
+073A  1283     BCF STATUS, 0x5                    182:   		banksel		0x75
+073B  1303     BCF STATUS, 0x6
+073C  00F5     MOVWF 0x75                         183:           movwf       0x75
+073D  1683     BSF STATUS, 0x5                    184:           i2c_common_nack      ;Send acknowledgement of data reception
+073E  1303     BCF STATUS, 0x6
+073F  1691     BSF TMR2, 0x5
+0740  1611     BSF TMR2, 0x4
+0741  1A11     BTFSC TMR2, 0x4
+0742  2F41     GOTO 0x741
+                                                  185:   
+0743  2F45     GOTO 0x745                         186:           goto        RD_END
+                                                  187:   
+                                                  188:   RD_ERR
+0744  0000     NOP                                189:           nop
+                                                  190:   
+                                                  191:           ;Release the I2C bus
+0745  1683     BSF STATUS, 0x5                    192:   RD_END  i2c_common_stop
+0746  1303     BCF STATUS, 0x6
+0747  1511     BSF TMR2, 0x2
+0748  1911     BTFSC TMR2, 0x2
+0749  2F48     GOTO 0x748
+074A  0008     RETURN                             193:           return
+                                                  194:   
+                                                  195:   rtc_convert
+                                                  196:   ;input:		W
+                                                  197:   ;output:	dig10 (0x77), dig1 (0x78)
+                                                  198:   ;desc:		This subroutine converts the binary number
+                                                  199:   ;			in W into a two digit ASCII number and place
+                                                  200:   ;			each digit into the corresponding registers
+                                                  201:   ;			dig10 or dig1
+074B  1283     BCF STATUS, 0x5                    202:   	banksel	0x76
+074C  1303     BCF STATUS, 0x6
+074D  00F6     MOVWF 0x76                         203:   	movwf   0x76             ; B1 = HHHH LLLL
+074E  0E76     SWAPF 0x76, W                      204:       swapf   0x76,w           ; W  = LLLL HHHH
+074F  390F     ANDLW 0xF                          205:       andlw   0x0f           ; Mask upper four bits 0000 HHHH
+0750  3E30     ADDLW 0x30                         206:       addlw   0x30           ; convert to ASCII
+0751  00F7     MOVWF 0x77                         207:       movwf	0x77		   ;saves into 10ths digit
+                                                  208:   
+0752  1283     BCF STATUS, 0x5                    209:   	banksel	0x76
+0753  1303     BCF STATUS, 0x6
+0754  0876     MOVF 0x76, W                       210:       movf    0x76,w
+0755  390F     ANDLW 0xF                          211:       andlw   0x0f           ; w  = 0000 LLLL
+0756  3E30     ADDLW 0x30                         212:       addlw   0x30           ; convert to ASCII
+0757  00F8     MOVWF 0x78                         213:       movwf	0x78	       ; saves into 1s digit
+0758  0008     RETURN                             214:      	return
+                                                  215:   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+                                                  216:   
+                                                  217:   
+                                                  218:   ;pic to pic subroutines;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+                                                  219:   p2p_write
+                                                  220:           ;Select the DS1307 on the bus, in WRITE mode
+0759  1683     BSF STATUS, 0x5                    221:           i2c_common_start
+075A  1303     BCF STATUS, 0x6
+075B  1411     BSF TMR2, 0x0
+075C  1811     BTFSC TMR2, 0x0
+075D  2F5C     GOTO 0x75C
+075E  3010     MOVLW 0x10                         222:           movlw       b'00010000'
+075F  1283     BCF STATUS, 0x5                    223:           i2c_common_write
+0760  1303     BCF STATUS, 0x6
+0761  0093     MOVWF SSPBUF
+0762  1683     BSF STATUS, 0x5
+0763  1303     BCF STATUS, 0x6
+0764  1914     BTFSC SSPCON, 0x2
+0765  2F64     GOTO 0x764
+0766  1683     BSF STATUS, 0x5
+0767  1303     BCF STATUS, 0x6
+0768  1683     BSF STATUS, 0x5                    224:           i2c_common_check_ack   W_END
+0769  1303     BCF STATUS, 0x6
+076A  1B11     BTFSC TMR2, 0x6
+076B  2F7D     GOTO 0x77D
+                                                  225:   
+076C  1283     BCF STATUS, 0x5                    226:   		banksel	0x70
+076D  1303     BCF STATUS, 0x6
+076E  0870     MOVF 0x70, W                       227:   		movf	0x70, W
+076F  1283     BCF STATUS, 0x5                    228:           i2c_common_write
+0770  1303     BCF STATUS, 0x6
+0771  0093     MOVWF SSPBUF
+0772  1683     BSF STATUS, 0x5
+0773  1303     BCF STATUS, 0x6
+0774  1914     BTFSC SSPCON, 0x2
+0775  2F74     GOTO 0x774
+0776  1683     BSF STATUS, 0x5
+0777  1303     BCF STATUS, 0x6
+0778  1683     BSF STATUS, 0x5                    229:           i2c_common_check_ack   W_END
+0779  1303     BCF STATUS, 0x6
+077A  1B11     BTFSC TMR2, 0x6
+077B  2F7D     GOTO 0x77D
+077C  2F7D     GOTO 0x77D                         230:           goto        W_END
+                                                  231:   W_END
+077D  1683     BSF STATUS, 0x5                    232:   		i2c_common_stop	;Release the I2C bus
+077E  1303     BCF STATUS, 0x6
+077F  1511     BSF TMR2, 0x2
+0780  1911     BTFSC TMR2, 0x2
+0781  2F80     GOTO 0x780
+0782  0008     RETURN                             233:           return
+                                                  234:   
+                                                  235:   
+                                                  236:   p2p_read
+                                                  237:           ;Select the DS1307 on the bus, in WRITE mode
+0783  1683     BSF STATUS, 0x5                    238:           i2c_common_start
+0784  1303     BCF STATUS, 0x6
+0785  1411     BSF TMR2, 0x0
+0786  1811     BTFSC TMR2, 0x0
+0787  2F86     GOTO 0x786
+0788  3011     MOVLW 0x11                         239:   		movlw       b'00010001'
+0789  1283     BCF STATUS, 0x5                    240:           i2c_common_write
+078A  1303     BCF STATUS, 0x6
+078B  0093     MOVWF SSPBUF
+078C  1683     BSF STATUS, 0x5
+078D  1303     BCF STATUS, 0x6
+078E  1914     BTFSC SSPCON, 0x2
+078F  2F8E     GOTO 0x78E
+0790  1683     BSF STATUS, 0x5
+0791  1303     BCF STATUS, 0x6
+0792  1683     BSF STATUS, 0x5                    241:   		i2c_common_check_ack   R_END
+0793  1303     BCF STATUS, 0x6
+0794  1B11     BTFSC TMR2, 0x6
+0795  2FA7     GOTO 0x7A7
+                                                  242:   
+0796  1683     BSF STATUS, 0x5                    243:           i2c_common_read
+0797  1303     BCF STATUS, 0x6
+0798  1591     BSF TMR2, 0x3
+0799  1991     BTFSC TMR2, 0x3
+079A  2F99     GOTO 0x799
+079B  1283     BCF STATUS, 0x5
+079C  1303     BCF STATUS, 0x6
+079D  0813     MOVF SSPBUF, W
+079E  1283     BCF STATUS, 0x5                    244:   		banksel		0x70
+079F  1303     BCF STATUS, 0x6
+07A0  00F0     MOVWF 0x70                         245:           movwf       0x70
+07A1  1683     BSF STATUS, 0x5                    246:           i2c_common_nack      ;Send acknowledgement of data reception
+07A2  1303     BCF STATUS, 0x6
+07A3  1691     BSF TMR2, 0x5
+07A4  1611     BSF TMR2, 0x4
+07A5  1A11     BTFSC TMR2, 0x4
+07A6  2FA5     GOTO 0x7A5
+                                                  247:   R_END
+07A7  1683     BSF STATUS, 0x5                    248:   		i2c_common_stop
+07A8  1303     BCF STATUS, 0x6
+07A9  1511     BSF TMR2, 0x2
+07AA  1911     BTFSC TMR2, 0x2
+07AB  2FAA     GOTO 0x7AA
+07AC  0008     RETURN                             249:           return
+                                                  250:   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+                                                  251:   
+                                                  252:           end
+                                                  253:   
+                                                  254:   

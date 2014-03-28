@@ -54,7 +54,12 @@
         light7 ;0x47
         light8 ;0x48
         light9 ;0x49
-        result_temp
+        result_temp;0x4a
+        passT  ;0x4b
+        flickerfailT ;0x4c
+        ledfailT    ;0x4d
+        noneT       ;0x4e
+
 
 	endc
 
@@ -70,9 +75,9 @@
         ORG 0x004
         goto ISR
 init
+         ;initialize timer interrupt
          bsf    INTCON, GIE
          banksel    OPTION_REG
-         ;init timer interrupt
          clrf       TMR0
          movlw      B'11000111'
          movwf      OPTION_REG
@@ -86,6 +91,7 @@ init
 
          bsf       STATUS,RP0     ; select bank 1
          clrf      TRISA
+         bsf       TRISA, 4
          movlw     b'11110011'    ; Set required keypad inputs
          movwf     TRISB
          clrf      TRISC          ; All port C is output
@@ -105,13 +111,10 @@ init
          call      InitLCD    ;Initialize the LCD (code in lcd.asm; imported by lcd.inc)
 
          ; init EEPROM
-         movlw    0x0a
+         movlw    0x10
          movwf    ADDRL
          clrf     DATAL
          clrf     VALUEL
-
-
-
 
 ;MAIN PROGRAM
 ;***************************************
@@ -275,7 +278,10 @@ check_A
     Display Runtime 
     call Convert
     clrf    runtime
+    call    shift_EE
     ;writing run info into EEPROM
+    movlw   0x10
+    movwf   ADDRL
     movf    pass, VALUEL
     movwf   VALUEL
     call    write_EE
@@ -294,10 +300,6 @@ check_A
     movf    none, VALUEL
     movwf   VALUEL
     call    write_EE
-    ;going back to original ADDRL address
-    decf    ADDRL
-    decf    ADDRL
-    decf    ADDRL 
     call    wait
     call Clear_Display
     ;can check previous run trials
@@ -336,8 +338,6 @@ Other_wise
 
 
 count_down
-        ;movlw D'9'
-        ;movwf count
         clrf show_data
         clrf pass
         clrf flickerfail
@@ -413,8 +413,10 @@ count_loop
 Check_Flicker
         call    HalfS 
         clrf    signal
-        movf    PORTB, w
-        andlw   b'00000001'
+        movf    PORTA, w
+        andlw   b'00010000'
+        ;movf    PORTB, w
+        ;andlw   b'00000001'
         btfss   STATUS, Z
                 goto flickertime
         incf    none
@@ -424,7 +426,6 @@ Check_Flicker
         goto    Display_results
 
 flickertime
-        bsf     PORTA, 4
         clrf    signal
         call    HalfS
         call    HalfS
@@ -483,6 +484,7 @@ results_access
          movlw   B'10000000' ;move cursor to Pass
          call    WR_INS
          Display PMenu
+ 
          call		HalfS    ;Wait until data is available from the keypad
          btfss		PORTB,1
          goto		results_access
@@ -680,6 +682,8 @@ end_display
         return
 
 pmenu_access
+         clrf       PORTB
+         clrf       key_temp
          call		HalfS    ;Wait until data is available from the keypad
          btfss		PORTB,1
          goto		pmenu_access
@@ -687,7 +691,9 @@ pmenu_access
          swapf		PORTB,W     ;Read PortB<7:4> into W<3:0>
          andlw		0x0F
          movwf      key_temp
+
 check_1
+        movf key_temp, W
         xorlw D'0'
         btfss STATUS, Z
             goto check_2
@@ -697,9 +703,16 @@ check_1
         BCD_Display lcd_tmp
         call Switch_Lines
         Display Trial
+        movlw    0x10
+        movwf    ADDRL
+        call display_EE
+        call HalfS
+        goto pmenu_access
+
+display_EE
+        call read_EE
         movlw   B'11000010' ;move cursor to Pass
         call WR_INS
-        call read_EE
         BCD_DisplayS DATAL
         movlw   B'11000110' ;move cursor to 46
         call WR_INS
@@ -716,12 +729,7 @@ check_1
         incf ADDRL
         call read_EE
         BCD_DisplayS DATAL
-        ;letting ADDRL go back
-        decf ADDRL
-        decf ADDRL
-        decf ADDRL
-        call HalfS
-        goto pmenu_access
+        return 
 
 check_2
         movf key_temp, W
@@ -734,6 +742,9 @@ check_2
         BCD_Display lcd_tmp
         call Switch_Lines
         Display Trial
+        movlw    0x14
+        movwf    ADDRL
+        call display_EE
         call HalfS
         goto pmenu_access
 
@@ -748,6 +759,9 @@ check_3
         BCD_Display lcd_tmp
         call Switch_Lines
         Display Trial
+        movlw    0x18
+        movwf    ADDRL
+        call display_EE
         call HalfS
         goto pmenu_access
 
@@ -762,6 +776,9 @@ check_4
         BCD_Display lcd_tmp
         call Switch_Lines
         Display Trial
+        movlw    0x1c
+        movwf    ADDRL
+        call display_EE
         call HalfS
         goto pmenu_access
 
@@ -776,6 +793,9 @@ check_5
         BCD_Display lcd_tmp
         call Switch_Lines
         Display Trial
+        movlw    0x20
+        movwf    ADDRL
+        call display_EE
         call HalfS
         goto pmenu_access
 
@@ -790,6 +810,9 @@ check_6
         BCD_Display lcd_tmp
         call Switch_Lines
         Display Trial
+        movlw    0x24
+        movwf    ADDRL
+        call display_EE
         call HalfS
         goto pmenu_access
 
@@ -804,6 +827,9 @@ check_7
         BCD_Display lcd_tmp
         call Switch_Lines
         Display Trial
+        movlw    0x28
+        movwf    ADDRL
+        call display_EE
         call HalfS
         goto pmenu_access
 
@@ -818,6 +844,9 @@ check_8
         BCD_Display lcd_tmp
         call Switch_Lines
         Display Trial
+        movlw    0x2c
+        movwf    ADDRL
+        call display_EE
         call HalfS
         goto pmenu_access
 
@@ -832,6 +861,9 @@ check_9
         BCD_Display lcd_tmp
         call Switch_Lines
         Display Trial
+        movlw    0x30
+        movwf    ADDRL
+        call display_EE
         call HalfS
         goto pmenu_access
 
@@ -921,11 +953,24 @@ Refresh
 
 Motor_On
     Display SW_ON
-    movlw 0x01 ;turn motor on
-    movwf PORTC
-    call HalfS
+    ;movlw 0x01 ;turn motor on
+    ;movwf PORTC
+    ;call QuarterS
     movlw 0x00 ;turn motor off
     movwf PORTC
+    call HalfS
+    movlw 0x01 ;turn motor on
+    movwf PORTC
+    call EightS
+    movlw 0x00 ;turn motor off
+    movwf PORTC
+    call HalfS
+    movlw 0x01 ;turn motor on
+    movwf PORTC
+    call EightS
+    movlw 0x00 ;turn motor off
+    movwf PORTC
+    call HalfS
     call Clear_Display
     return
 
@@ -933,7 +978,19 @@ Motor_Off
     Display SW_OFF
     movlw 0x02 ;turn motor on
     movwf PORTC
+    call QuarterS
+    movlw 0x00 ;turn motor off
+    movwf PORTC
     call HalfS
+    movlw 0x02 ;turn motor on
+    movwf PORTC
+    call EightS
+;    movlw 0x00 ;turn motor off
+;    movwf PORTC
+;    call  HalfS
+;    movlw 0x02 ;turn motor on
+;    movwf PORTC
+;    call QuarterS
     movlw 0x00 ;turn motor off
     movwf PORTC
     call Clear_Display
@@ -955,6 +1012,50 @@ HalfS_0
       goto   $+2
       decfsz COUNTL, f
       goto   HalfS_0
+
+      goto $+1
+      nop
+      nop
+		return
+
+QuarterS
+	local	QuarterS_0
+      movlw 0x44
+      movwf COUNTH
+      movlw 0x4F
+      movwf COUNTM
+      movlw 0x03
+      movwf COUNTL
+
+QuarterS_0
+      decfsz COUNTH, f
+      goto   $+2
+      decfsz COUNTM, f
+      goto   $+2
+      decfsz COUNTL, f
+      goto   QuarterS_0
+
+      goto $+1
+      nop
+      nop
+		return
+
+EightS
+	local	EightS_0
+      movlw 0x20
+      movwf COUNTH
+      movlw 0x20
+      movwf COUNTM
+      movlw 0x03
+      movwf COUNTL
+
+EightS_0
+      decfsz COUNTH, f
+      goto   $+2
+      decfsz COUNTM, f
+      goto   $+2
+      decfsz COUNTL, f
+      goto   EightS_0
 
       goto $+1
       nop
@@ -1243,15 +1344,36 @@ write_EE
     bcf    STATUS, RP1 
     return
 
+write_EES
+    banksel ADDRL
+    movf    ADDRL, W ; write address of desired program memory location
+    banksel EEADR
+    movwf   EEADR
+
+    bsf     STATUS, RP0
+    bsf     EECON1, EEPGD
+    bsf     EECON1, WREN
+    bcf     INTCON, GIE
+
+    movlw   0x55
+    movwf   EECON2
+    movlw   0xaa
+    movwf   EECON2 ;
+    bsf     EECON1, WR ; start write operation
+    nop ;wait for micro
+    nop
+
+    bsf    INTCON, GIE ;re-enable interrupts
+    bcf    EECON1, WREN ;disables writes
+    bcf    STATUS, RP0
+    bcf    STATUS, RP1
+    return
+
 read_EE
     banksel ADDRL
     movf   ADDRL, W
     banksel EEADR
     movwf   EEADR
- ;   banksel ADDRH
- ;   movf    ADDRH, W
- ;   banksel EEADRH
- ;   movwf   EEADRH
     banksel EECON1
     bsf     EECON1, EEPGD
     bsf     EECON1, RD
@@ -1261,11 +1383,251 @@ read_EE
     movf    EEDATA, W
     banksel DATAL
     movwf   DATAL
-  ;  banksel EEDATH
-   ; movf    EEDATH, W
-   ; banksel DATAH
-   ; movwf   DATAH
     bcf     STATUS, RP0
     bcf     STATUS, RP1
     return
+
+shift_EE
+    ;shift 8 to 9
+    banksel DATAL
+    movlw   0x2c
+    movwf   ADDRL
+    call    read_EE
+    movlw   0x30
+    movwf   ADDRL
+    call    write_EES
+
+    movlw   0x2d
+    movwf   ADDRL
+    call    read_EE
+    movlw   0x31
+    movwf   ADDRL
+    call    write_EES
+
+    movlw   0x2e
+    movwf   ADDRL
+    call    read_EE
+    movlw   0x32
+    movwf   ADDRL
+    call    write_EES
+
+    movlw   0x2f
+    movwf   ADDRL
+    call    read_EE
+    movlw   0x33
+    movwf   ADDRL
+    call    write_EES
+
+    ;shift 7 to 8
+    banksel DATAL
+    movlw   0x28
+    movwf   ADDRL
+    call    read_EE
+    movlw   0x2c
+    movwf   ADDRL
+    call    write_EES
+
+    movlw   0x29
+    movwf   ADDRL
+    call    read_EE
+    movlw   0x2d
+    movwf   ADDRL
+    call    write_EES
+
+    movlw   0x2a
+    movwf   ADDRL
+    call    read_EE
+    movlw   0x2e
+    movwf   ADDRL
+    call    write_EES
+
+    movlw   0x2b
+    movwf   ADDRL
+    call    read_EE
+    movlw   0x2f
+    movwf   ADDRL
+    call    write_EES
+
+    ;shift 6 to 7
+    banksel DATAL
+    movlw   0x24
+    movwf   ADDRL
+    call    read_EE
+    movlw   0x28
+    movwf   ADDRL
+    call    write_EES
+
+    movlw   0x25
+    movwf   ADDRL
+    call    read_EE
+    movlw   0x29
+    movwf   ADDRL
+    call    write_EES
+
+    movlw   0x26
+    movwf   ADDRL
+    call    read_EE
+    movlw   0x2a
+    movwf   ADDRL
+    call    write_EES
+
+    movlw   0x27
+    movwf   ADDRL
+    call    read_EE
+    movlw   0x2b
+    movwf   ADDRL
+    call    write_EES
+
+    ;shift 5 to 6
+    banksel DATAL
+    movlw   0x20
+    movwf   ADDRL
+    call    read_EE
+    movlw   0x24
+    movwf   ADDRL
+    call    write_EES
+
+    movlw   0x21
+    movwf   ADDRL
+    call    read_EE
+    movlw   0x25
+    movwf   ADDRL
+    call    write_EES
+
+    movlw   0x22
+    movwf   ADDRL
+    call    read_EE
+    movlw   0x26
+    movwf   ADDRL
+    call    write_EES
+
+    movlw   0x23
+    movwf   ADDRL
+    call    read_EE
+    movlw   0x27
+    movwf   ADDRL
+    call    write_EES
+
+    ;shift 4 to 5
+    banksel DATAL
+    movlw   0x1c
+    movwf   ADDRL
+    call    read_EE
+    movlw   0x20
+    movwf   ADDRL
+    call    write_EES
+
+    movlw   0x1d
+    movwf   ADDRL
+    call    read_EE
+    movlw   0x21
+    movwf   ADDRL
+    call    write_EES
+
+    movlw   0x1e
+    movwf   ADDRL
+    call    read_EE
+    movlw   0x22
+    movwf   ADDRL
+    call    write_EES
+
+    movlw   0x1f
+    movwf   ADDRL
+    call    read_EE
+    movlw   0x23
+    movwf   ADDRL
+    call    write_EES
+
+    ;shift 3 to 4
+    banksel DATAL
+    movlw   0x18
+    movwf   ADDRL
+    call    read_EE
+    movlw   0x1c
+    movwf   ADDRL
+    call    write_EES
+
+    movlw   0x19
+    movwf   ADDRL
+    call    read_EE
+    movlw   0x1d
+    movwf   ADDRL
+    call    write_EES
+
+    movlw   0x1a
+    movwf   ADDRL
+    call    read_EE
+    movlw   0x1e
+    movwf   ADDRL
+    call    write_EES
+
+    movlw   0x1b
+    movwf   ADDRL
+    call    read_EE
+    movlw   0x1f
+    movwf   ADDRL
+    call    write_EES
+
+    ;shift 2 to 3
+    banksel DATAL
+    movlw   0x14
+    movwf   ADDRL
+    call    read_EE
+    movlw   0x18
+    movwf   ADDRL
+    call    write_EES
+
+    movlw   0x15
+    movwf   ADDRL
+    call    read_EE
+    movlw   0x19
+    movwf   ADDRL
+    call    write_EES
+
+    movlw   0x16
+    movwf   ADDRL
+    call    read_EE
+    movlw   0x1a
+    movwf   ADDRL
+    call    write_EES
+
+    movlw   0x17
+    movwf   ADDRL
+    call    read_EE
+    movlw   0x1b
+    movwf   ADDRL
+    call    write_EES
+
+    ;shift 1 to 2
+    banksel DATAL
+    movlw   0x10
+    movwf   ADDRL
+    call    read_EE
+    movlw   0x14
+    movwf   ADDRL
+    call    write_EES
+
+    movlw   0x11
+    movwf   ADDRL
+    call    read_EE
+    movlw   0x15
+    movwf   ADDRL
+    call    write_EES
+
+    movlw   0x12
+    movwf   ADDRL
+    call    read_EE
+    movlw   0x16
+    movwf   ADDRL
+    call    write_EES
+
+    movlw   0x13
+    movwf   ADDRL
+    call    read_EE
+    movlw   0x17
+    movwf   ADDRL
+    call    write_EES
+
+    return
+
 END

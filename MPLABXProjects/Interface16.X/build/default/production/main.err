@@ -1,0 +1,46 @@
+Warning[207] /Users/Judy/MPLABXProjects/Interface16.X/LCD.inc 8 : Found label after column 1. (LCD_DELAY)
+Message[302] /Users/Judy/MPLABXProjects/Interface16.X/main.asm 83 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] /Users/Judy/MPLABXProjects/Interface16.X/main.asm 93 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] /Users/Judy/MPLABXProjects/Interface16.X/main.asm 94 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] /Users/Judy/MPLABXProjects/Interface16.X/main.asm 96 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] /Users/Judy/MPLABXProjects/Interface16.X/main.asm 97 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] /Users/Judy/MPLABXProjects/Interface16.X/main.asm 98 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] /Users/Judy/MPLABXProjects/Interface16.X/main.asm 101 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] /Users/Judy/MPLABXProjects/Interface16.X/main.asm 102 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Warning[202] /Users/Judy/MPLABXProjects/Interface16.X/main.asm 285 : Argument out of range.  Least significant bits used.
+Message[305] /Users/Judy/MPLABXProjects/Interface16.X/main.asm 289 : Using default destination of 1 (file).
+Warning[202] /Users/Judy/MPLABXProjects/Interface16.X/main.asm 290 : Argument out of range.  Least significant bits used.
+Message[305] /Users/Judy/MPLABXProjects/Interface16.X/main.asm 293 : Using default destination of 1 (file).
+Warning[202] /Users/Judy/MPLABXProjects/Interface16.X/main.asm 295 : Argument out of range.  Least significant bits used.
+Message[305] /Users/Judy/MPLABXProjects/Interface16.X/main.asm 298 : Using default destination of 1 (file).
+Warning[202] /Users/Judy/MPLABXProjects/Interface16.X/main.asm 300 : Argument out of range.  Least significant bits used.
+Message[305] /Users/Judy/MPLABXProjects/Interface16.X/main.asm 422 : Using default destination of 1 (file).
+Message[305] /Users/Judy/MPLABXProjects/Interface16.X/main.asm 423 : Using default destination of 1 (file).
+Message[305] /Users/Judy/MPLABXProjects/Interface16.X/main.asm 438 : Using default destination of 1 (file).
+Message[305] /Users/Judy/MPLABXProjects/Interface16.X/main.asm 443 : Using default destination of 1 (file).
+Message[305] /Users/Judy/MPLABXProjects/Interface16.X/main.asm 453 : Using default destination of 1 (file).
+Message[305] /Users/Judy/MPLABXProjects/Interface16.X/main.asm 459 : Using default destination of 1 (file).
+Message[305] /Users/Judy/MPLABXProjects/Interface16.X/main.asm 719 : Using default destination of 1 (file).
+Message[305] /Users/Judy/MPLABXProjects/Interface16.X/main.asm 724 : Using default destination of 1 (file).
+Message[305] /Users/Judy/MPLABXProjects/Interface16.X/main.asm 729 : Using default destination of 1 (file).
+Message[305] /Users/Judy/MPLABXProjects/Interface16.X/main.asm 1304 : Using default destination of 1 (file).
+Message[302] /Users/Judy/MPLABXProjects/Interface16.X/main.asm 1318 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] /Users/Judy/MPLABXProjects/Interface16.X/main.asm 1324 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] /Users/Judy/MPLABXProjects/Interface16.X/main.asm 1329 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] /Users/Judy/MPLABXProjects/Interface16.X/main.asm 1330 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] /Users/Judy/MPLABXProjects/Interface16.X/main.asm 1334 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] /Users/Judy/MPLABXProjects/Interface16.X/main.asm 1336 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] /Users/Judy/MPLABXProjects/Interface16.X/main.asm 1337 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] /Users/Judy/MPLABXProjects/Interface16.X/main.asm 1342 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] /Users/Judy/MPLABXProjects/Interface16.X/main.asm 1351 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] /Users/Judy/MPLABXProjects/Interface16.X/main.asm 1354 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] /Users/Judy/MPLABXProjects/Interface16.X/main.asm 1355 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] /Users/Judy/MPLABXProjects/Interface16.X/main.asm 1359 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] /Users/Judy/MPLABXProjects/Interface16.X/main.asm 1361 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] /Users/Judy/MPLABXProjects/Interface16.X/main.asm 1362 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] /Users/Judy/MPLABXProjects/Interface16.X/main.asm 1367 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] /Users/Judy/MPLABXProjects/Interface16.X/main.asm 1376 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] /Users/Judy/MPLABXProjects/Interface16.X/main.asm 1378 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] /Users/Judy/MPLABXProjects/Interface16.X/main.asm 1379 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Message[302] /Users/Judy/MPLABXProjects/Interface16.X/main.asm 1383 : Register in operand not in bank 0.  Ensure that bank bits are correct.
+Warning[205] /Users/Judy/MPLABXProjects/Interface16.X/main.asm 1633 : Found directive in column 1. (END)
