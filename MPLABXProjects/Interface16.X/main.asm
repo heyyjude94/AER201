@@ -59,6 +59,7 @@
         flickerfailT ;0x4c
         ledfailT    ;0x4d
         noneT       ;0x4e
+        val
 
 
 	endc
@@ -97,6 +98,8 @@ init
          clrf      TRISC          ; All port C is output
          clrf      TRISD          ; All port D is output
 
+
+
          ;Set SDA and SCL to high-Z first as required for I2C
 		 bsf	   TRISC,4
 		 bsf	   TRISC,3
@@ -108,13 +111,19 @@ init
          clrf      PORTD
 		 call 	   i2c_common_setup
 
+
          call      InitLCD    ;Initialize the LCD (code in lcd.asm; imported by lcd.inc)
+
+         ;init RS232
+         call      pc_init
 
          ; init EEPROM
          movlw    0x10
          movwf    ADDRL
          clrf     DATAL
          clrf     VALUEL
+
+
 
 ;MAIN PROGRAM
 ;***************************************
@@ -157,13 +166,6 @@ Menu
 Run
 		addwf	PCL,F
 		dt		"Testing Candles", 0
-SW_ON
-		addwf	PCL,F
-		dt		"Switch On", 0
-
-SW_OFF
-        addwf   PCL, F
-        dt      "Switch Off", 0
 
 Done
 		addwf	PCL,F
@@ -183,10 +185,6 @@ PMenu
 RTC
 		addwf	PCL,F
 		dt		"Time:", 0
-
-Writing
-        addwf   PCL, F
-        dt      "Writing EE", 0
 
 Trial
         addwf   PCL, F
@@ -261,11 +259,9 @@ check_A
     xorlw   D'3'
     btfss   STATUS, Z
         goto    check_B
-
     call Clear_Display
     Display Run
     call    HalfS
-    call Clear_Display
     call    Motor_On
     bsf    INTCON, 5
     call    count_down
@@ -304,6 +300,7 @@ check_A
     call Clear_Display
     ;can check previous run trials
     call results_access
+    call pc_log
     call wait
 
     call Clear_Display
@@ -352,7 +349,6 @@ count_down
         clrf light7
         clrf light8
         clrf light9
-        Display Run
 
 count_loop
         movlw b'00000000'
@@ -423,13 +419,21 @@ Check_Flicker
         incf    show_data
         movlw   b'00000001'
         movwf   result_temp
+        call Clear_Display
+        BCD_DisplayS show_data
+        movlw " "
+        call WR_DATA
+        movlw "N"
+        call WR_DATA
+        movlw " "
+        call WR_DATA
         goto    Display_results
 
 flickertime
         clrf    signal
-        call    HalfS
-        call    HalfS
-        call    HalfS
+       ; call    HalfS
+       ; call    HalfS
+       ; call    HalfS
         call    HalfS
         call    HalfS
         call    HalfS
@@ -438,11 +442,26 @@ flickertime
         incf    show_data
         movlw   B'10000000' ;move cursor to position H?4B?
         call    WR_INS
-        btfss   signal, 7
-            goto    notflickerfail
+        
+        btfss   signal, 6
+        ;btfss   signal, 7
+            ;goto    notflickerfail
+            goto notflickerfail
+        btfss   signal, 3
+            goto notflickerfail 
         incf    flickerfail
         movlw   b'00000100'
         movwf   result_temp
+        call Clear_Display
+        BCD_DisplayS show_data
+        movlw " "
+        call WR_DATA
+        movlw "F"
+        call WR_DATA
+        movlw "F"
+        call WR_DATA
+        movlw " "
+        call WR_DATA
         goto    Display_results
 
 notflickerfail 
@@ -453,16 +472,34 @@ notflickerfail
         incf    ledfail
         movlw   b'00000010'
         movwf   result_temp
+        call Clear_Display
+        BCD_DisplayS show_data
+        movlw " "
+        call WR_DATA
+        movlw "L"
+        call WR_DATA
+        movlw "F"
+        call WR_DATA
+        movlw " "
+        call WR_DATA
         goto    Display_results
 
 goodcandle    
         incf    pass
         movlw   b'00001000'
         movwf   result_temp
-
-Display_results
         call Clear_Display
         BCD_DisplayS show_data
+        movlw " "
+        call WR_DATA
+        movlw "P"
+        call WR_DATA
+        movlw " "
+        call WR_DATA
+
+
+Display_results
+        ;BCD_DisplayS show_data
         call    Convert1
         call Switch_Lines
         Display     Trial
@@ -952,10 +989,6 @@ Refresh
         return
 
 Motor_On
-    Display SW_ON
-    ;movlw 0x01 ;turn motor on
-    ;movwf PORTC
-    ;call QuarterS
     movlw 0x00 ;turn motor off
     movwf PORTC
     call HalfS
@@ -975,7 +1008,6 @@ Motor_On
     return
 
 Motor_Off
-    Display SW_OFF
     movlw 0x02 ;turn motor on
     movwf PORTC
     call QuarterS
@@ -985,12 +1017,6 @@ Motor_Off
     movlw 0x02 ;turn motor on
     movwf PORTC
     call EightS
-;    movlw 0x00 ;turn motor off
-;    movwf PORTC
-;    call  HalfS
-;    movlw 0x02 ;turn motor on
-;    movwf PORTC
-;    call QuarterS
     movlw 0x00 ;turn motor off
     movwf PORTC
     call Clear_Display
@@ -1388,155 +1414,7 @@ read_EE
     return
 
 shift_EE
-    ;shift 8 to 9
-    banksel DATAL
-    movlw   0x2c
-    movwf   ADDRL
-    call    read_EE
-    movlw   0x30
-    movwf   ADDRL
-    call    write_EES
 
-    movlw   0x2d
-    movwf   ADDRL
-    call    read_EE
-    movlw   0x31
-    movwf   ADDRL
-    call    write_EES
-
-    movlw   0x2e
-    movwf   ADDRL
-    call    read_EE
-    movlw   0x32
-    movwf   ADDRL
-    call    write_EES
-
-    movlw   0x2f
-    movwf   ADDRL
-    call    read_EE
-    movlw   0x33
-    movwf   ADDRL
-    call    write_EES
-
-    ;shift 7 to 8
-    banksel DATAL
-    movlw   0x28
-    movwf   ADDRL
-    call    read_EE
-    movlw   0x2c
-    movwf   ADDRL
-    call    write_EES
-
-    movlw   0x29
-    movwf   ADDRL
-    call    read_EE
-    movlw   0x2d
-    movwf   ADDRL
-    call    write_EES
-
-    movlw   0x2a
-    movwf   ADDRL
-    call    read_EE
-    movlw   0x2e
-    movwf   ADDRL
-    call    write_EES
-
-    movlw   0x2b
-    movwf   ADDRL
-    call    read_EE
-    movlw   0x2f
-    movwf   ADDRL
-    call    write_EES
-
-    ;shift 6 to 7
-    banksel DATAL
-    movlw   0x24
-    movwf   ADDRL
-    call    read_EE
-    movlw   0x28
-    movwf   ADDRL
-    call    write_EES
-
-    movlw   0x25
-    movwf   ADDRL
-    call    read_EE
-    movlw   0x29
-    movwf   ADDRL
-    call    write_EES
-
-    movlw   0x26
-    movwf   ADDRL
-    call    read_EE
-    movlw   0x2a
-    movwf   ADDRL
-    call    write_EES
-
-    movlw   0x27
-    movwf   ADDRL
-    call    read_EE
-    movlw   0x2b
-    movwf   ADDRL
-    call    write_EES
-
-    ;shift 5 to 6
-    banksel DATAL
-    movlw   0x20
-    movwf   ADDRL
-    call    read_EE
-    movlw   0x24
-    movwf   ADDRL
-    call    write_EES
-
-    movlw   0x21
-    movwf   ADDRL
-    call    read_EE
-    movlw   0x25
-    movwf   ADDRL
-    call    write_EES
-
-    movlw   0x22
-    movwf   ADDRL
-    call    read_EE
-    movlw   0x26
-    movwf   ADDRL
-    call    write_EES
-
-    movlw   0x23
-    movwf   ADDRL
-    call    read_EE
-    movlw   0x27
-    movwf   ADDRL
-    call    write_EES
-
-    ;shift 4 to 5
-    banksel DATAL
-    movlw   0x1c
-    movwf   ADDRL
-    call    read_EE
-    movlw   0x20
-    movwf   ADDRL
-    call    write_EES
-
-    movlw   0x1d
-    movwf   ADDRL
-    call    read_EE
-    movlw   0x21
-    movwf   ADDRL
-    call    write_EES
-
-    movlw   0x1e
-    movwf   ADDRL
-    call    read_EE
-    movlw   0x22
-    movwf   ADDRL
-    call    write_EES
-
-    movlw   0x1f
-    movwf   ADDRL
-    call    read_EE
-    movlw   0x23
-    movwf   ADDRL
-    call    write_EES
 
     ;shift 3 to 4
     banksel DATAL
@@ -1629,5 +1507,182 @@ shift_EE
     call    write_EES
 
     return
+
+pc_init bsf       STATUS,RP0     ; select bank 1
+        clrf      TRISD
+
+        ;Setup USART for RS232
+        movlw     d'15'          ; BAUD rate 9600, assuming 10MHz oscillator
+        movwf     SPBRG
+        clrf      TXSTA          ; 8 bits data ,no,1 stop
+
+        bcf       STATUS,RP0     ; select bank 0
+        bsf       RCSTA,SPEN     ; Asynchronous serial port enable
+        bsf       RCSTA,CREN     ; continuous receive
+
+        bsf       STATUS,RP0     ; select bank 1
+        bsf       TXSTA,TXEN     ; Transmit enable
+        bcf       STATUS,RP0     ; select bank 0
+
+        return
+
+wrt_char
+        bcf     STATUS, RP0
+        movwf     TXREG
+        bsf       STATUS,RP0     ; Go to bank with TXSTA
+        btfss     TXSTA,1        ; check TRMT bit in TXSTA (FSR) until TRMT=1
+        goto      $-1
+        bcf     STATUS, RP0
+        return
+
+
+display_num
+        movf    val,w
+        andlw   0x0f           ; w  = 0000 LLLL
+        addlw   0x30           ; convert to ASCII
+        bcf     STATUS, RP0
+        movwf     TXREG
+        bsf       STATUS,RP0     ; Go to bank with TXSTA
+        btfss     TXSTA,1        ; check TRMT bit in TXSTA (FSR) until TRMT=1
+        goto      $-1
+        banksel val
+    	return
+
+pc_log
+
+		;Get year
+		movlw	"2"				;First line shows 20**/**/**
+		call	wrt_char
+		movlw	"0"
+		call	wrt_char
+
+		rtc_read	0x06		;Read Address 0x06 from DS1307---year
+        banksel   val
+        movf      0x77, w
+        movwf     val
+        call      display_num
+        movf      0x78, w
+        movwf     val
+        call      display_num
+		movlw	"/"
+		call	wrt_char
+
+		;Get month
+		rtc_read	0x05		;Read Address 0x05 from DS1307---month
+        movf      0x77, w
+        movwf     val
+        call      display_num
+        movf      0x78, w
+        movwf     val
+        call      display_num
+
+		movlw	"/"
+        call	wrt_char
+
+		;Get day
+		rtc_read	0x04		;Read Address 0x04 from DS1307---day
+        movf      0x77, w
+        movwf     val
+        call      display_num
+        movf      0x78, w
+        movwf     val
+        call      display_num
+
+        movlw     " "
+        call    wrt_char
+
+		;Get hour
+		rtc_read	0x02
+        movf      0x77, w
+        movwf     val
+        call      display_num
+        movf      0x78, w
+        movwf     val
+        call      display_num
+		movlw	":"
+		call	wrt_char
+
+		;Get minute
+		rtc_read	0x01		;Read Address 0x01 from DS1307---min
+        movf      0x77, w
+        movwf     val
+        call      display_num
+        movf      0x78, w
+        movwf     val
+        call      display_num
+
+
+        call      next_line
+
+        movlw     "P"
+        call    wrt_char
+        movlw     ":"
+        call    wrt_char
+
+        banksel   val
+        movf      pass, w
+        movwf     val
+        call      display_num
+
+        movlw     " "
+        call    wrt_char
+
+        movlw     "F"
+        call    wrt_char
+
+        movlw     "F"
+        call    wrt_char
+
+        movlw     ":"
+        call    wrt_char
+
+        banksel   val
+        movf      flickerfail, w
+        movwf     val
+        call      display_num
+
+        movlw     " "
+        call    wrt_char
+
+        movlw     "L"
+        call    wrt_char
+
+        movlw     "F"
+        call    wrt_char
+
+        movlw     ":"
+        call    wrt_char
+
+        banksel   val
+        movf      ledfail, w
+        movwf     val
+        call      display_num
+
+        movlw     " "
+        call    wrt_char
+
+        movlw     "N"
+        call    wrt_char
+
+        movlw     ":"
+        call    wrt_char
+
+        banksel   val
+        movf      none, w
+        movwf     val
+        call      display_num
+
+        call      next_line
+
+        return
+
+next_line
+        movlw     H'0A'
+        call    wrt_char
+        movlw     H'0D'
+        call    wrt_char
+
+return
+
 
 END

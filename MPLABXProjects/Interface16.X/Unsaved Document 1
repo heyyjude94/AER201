@@ -1,0 +1,98 @@
+wrt_char
+        bcf     STATUS, RP0
+        movwf     TXREG
+        bsf       STATUS,RP0     ; Go to bank with TXSTA
+        btfss     TXSTA,1        ; check TRMT bit in TXSTA (FSR) until TRMT=1
+        goto      $-1
+        return
+
+
+display_num
+        movf    val,w
+        andlw   0x0f           ; w  = 0000 LLLL
+        addlw   0x30           ; convert to ASCII
+        bcf     STATUS, RP0
+        movwf     TXREG
+        bsf       STATUS,RP0     ; Go to bank with TXSTA
+        btfss     TXSTA,1        ; check TRMT bit in TXSTA (FSR) until TRMT=1
+        goto      $-1
+    	return
+
+pc_init bsf       STATUS,RP0     ; select bank 1
+        clrf      TRISD
+
+        ;Setup USART for RS232
+        movlw     d'15'          ; BAUD rate 9600, assuming 10MHz oscillator
+        movwf     SPBRG
+        clrf      TXSTA          ; 8 bits data ,no,1 stop
+
+        bcf       STATUS,RP0     ; select bank 0
+        bsf       RCSTA,SPEN     ; Asynchronous serial port enable
+        bsf       RCSTA,CREN     ; continuous receive
+
+        bsf       STATUS,RP0     ; select bank 1
+        bsf       TXSTA,TXEN     ; Transmit enable
+        bcf       STATUS,RP0     ; select bank 0
+
+        return
+
+pc_log
+        movlw     "P"
+        call    wrt_char
+        movlw     ":"
+        call    wrt_char
+
+        banksel   val
+        movf      pass, w
+        movwf     val
+        call      display_num
+
+        movlw     " "
+        call    wrt_char
+
+        movlw     "F"
+        call    wrt_char
+
+        movlw     "F"
+        call    wrt_char
+
+        movlw     ":"
+        call    wrt_char
+
+        banksel   val
+        movf      flickerfail, w
+        movwf     val
+        call      display_num
+
+        movlw     " "
+        call    wrt_char
+
+        movlw     "L"
+        call    wrt_char
+
+        movlw     "F"
+        call    wrt_char
+
+        movlw     ":"
+        call    wrt_char
+
+        banksel   val
+        movf      ledfail, w
+        movwf     val
+        call      display_num
+
+        movlw     " "
+        call    wrt_char
+
+        movlw     "N"
+        call    wrt_char
+
+        movlw     ":"
+        call    wrt_char
+
+        banksel   val
+        movf      none, w
+        movwf     val
+        call      display_num
+        return
+
